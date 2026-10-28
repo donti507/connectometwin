@@ -1,5 +1,6 @@
-import {compileWiring, Simulation, wrapped} from './engine.mjs';
+import {compileWiring, Simulation, simulate, wrapped} from './engine.mjs';
 import {families, colors, layout, strongestEdges, orientedDiff, ratioWidth} from './view.mjs';
+import {configureRun, referenceFor} from './run.mjs';
 const $ = id => document.getElementById(id);
 const radians = degrees => degrees * Math.PI / 180;
 const degrees = angle => angle * 180 / Math.PI;
@@ -8,7 +9,7 @@ const fetchJSON = async name => {
   if (!response.ok) throw new Error(`Cannot load ${name}: HTTP ${response.status}`);
   return response.json();
 };
-const state = {data: {}, compiled: {}, current: null, comparison: 'fafb_buhmann', simulation: null,
+const state = {data: {}, compiled: {}, current: null, simulation: null,
   points: [], trace: [], frame: null, running: false, lastStep: 0, activity: null, dirty: true};
 const layer = document.createElement('canvas');
 const canvas = $('network'), dial = $('dial'), chart = $('error-chart');
@@ -53,12 +54,14 @@ function drawConnections() {
   context.globalAlpha = 1;
   const missing = points.filter(p => p.fallback).length;
   $('connection-note').textContent = `${ids.length.toLocaleString()} / ${data.edges.w.length.toLocaleString()} connections · ${all ? 'all edges' : 'strongest by absolute weight'} · ${missing} missing angles placed evenly on their family rings (◇).`;
-  const diff = orientedDiff(state.diffs, state.current, state.comparison);
+  const from = $('wiring').value, to = $('compare').value;
+  const diff = orientedDiff(state.diffs, from, to);
+  if (!diff) $('show-diff').checked = false;
   $('show-diff').disabled = !diff;
   $('diff-legend').hidden = !($('show-diff').checked && diff);
   $('diff-note').hidden = !$('show-diff').checked;
   if ($('show-diff').checked && diff) {
-    const other = state.data[state.comparison];
+    const other = state.data[state.current === from ? to : from];
     const strength = new Map();
     for (const d of [data, other]) for (let i = 0; i < d.edges.w.length; i++) {
       const key = `${d.edges.pre[i]}:${d.edges.post[i]}`;
@@ -72,7 +75,7 @@ function drawConnections() {
     context.globalAlpha = all ? 0.23 : 0.5;
     for (const item of shown) line(context, points[item.pair[0]], points[item.pair[1]], item.color, item.width);
     context.globalAlpha = 1;
-    $('diff-note').textContent = `${data.name} → ${other.name}: ${diff.added.length.toLocaleString()} added, ${diff.removed.length.toLocaleString()} removed, ${diff.changed.length.toLocaleString()} changed (>1.5× in either direction). Showing ${shown.length.toLocaleString()} / ${overlay.length.toLocaleString()} diff edges. Width shows the magnitude of the log weight ratio for changed edges.`;
+    $('diff-note').textContent = `${state.data[from].name} → ${state.data[to].name}: ${diff.added.length.toLocaleString()} added, ${diff.removed.length.toLocaleString()} removed, ${diff.changed.length.toLocaleString()} changed (>1.5× in either direction). Showing ${shown.length.toLocaleString()} / ${overlay.length.toLocaleString()} diff edges. Width shows the magnitude of the log weight ratio for changed edges.`;
   }
   state.dirty = true;
 }
@@ -117,7 +120,7 @@ function drawDial() {
     line(dialCtx, center, {x: center.x + Math.cos(angle) * length, y: center.y - Math.sin(angle) * length}, color, 2.5);
     dialCtx.setLineDash([]);
   };
-  needle(target, '#ffb378', radius - 11, state.frame && state.frame.t >= 5);
+  needle(target, '#ffb378', radius - 11, state.frame && state.frame.t >= state.run.options.cueSteps);
   if (state.frame) needle(state.frame.heading, '#68e0bd', radius - 22, false);
   dialCtx.fillStyle = '#e9eee9'; dialCtx.beginPath(); dialCtx.arc(center.x, center.y, 3, 0, Math.PI * 2); dialCtx.fill();
 }
@@ -126,7 +129,7 @@ function drawChart() {
   const left = 43, right = width - 24, top = 15, bottom = height - 32;
   const x = t => left + t / 39 * (right - left), y = error => bottom - error / 180 * (bottom - top);
   chartCtx.clearRect(0, 0, width, height);
-  chartCtx.fillStyle = '#ffb3780c'; chartCtx.fillRect(left, top, x(4.5) - left, bottom - top);
+  chartCtx.fillStyle = '#ffb3780c'; chartCtx.fillRect(left, top, x(state.run?.options.cueSteps === 40 ? 39 : 4.5) - left, bottom - top);
   chartCtx.font = '9px system-ui'; chartCtx.textBaseline = 'middle';
   for (const error of [0, 60, 120, 180]) {
     line(chartCtx, {x: left, y: y(error)}, {x: right, y: y(error)}, '#2d3d33', 0.6);
@@ -144,35 +147,52 @@ function updateNumbers() {
   const t = state.frame?.t;
   $('decoded-number').textContent = state.frame ? `${degrees(state.frame.heading).toFixed(1)}°` : '—';
   $('step-number').textContent = `Step ${t ?? '—'} / 39`;
-  $('cue-state').textContent = t === undefined ? 'READY' : t < 5 ? 'CUE ON' : t === 39 ? 'COMPLETE' : 'MEMORY';
+  $('cue-state').textContent = t === undefined ? 'READY' : t === 39 ? 'COMPLETE' : t < state.run.options.cueSteps ? 'CUE ON' : 'MEMORY';
+  $('current-error').textContent = state.trace.length ? `${state.trace.at(-1).toFixed(2)}°` : '—';
   const errors = state.trace.slice(5);
   $('mean-error').textContent = errors.length ? `${(errors.reduce((a, b) => a + b, 0) / errors.length).toFixed(2)}°` : '—';
   $('play').textContent = state.running ? 'Pause' : state.simulation?.t === 40 ? 'Replay' : 'Play';
 }
+function selection() {
+  return {a:$('wiring').value, b:$('compare').value, mode:$('mode').value,
+    network:$('model').value, refit:$('refit').checked, scalePercent:+$('scale').value,
+    darkness:$('darkness').checked};
+}
+const benchmarks = new Map();
 function restart() {
   if (!state.current) return;
+  state.run = configureRun(state.data, state.maps, state.refits, selection());
+  $('refit').disabled = !state.run.refitAvailable;
+  if (!state.run.refitAvailable) $('refit').checked = false;
+  $('refit-note').textContent = state.run.refitAvailable ? 'Cell-type gains fitted for this directed pair.' : 'Available for exported noise-trained transplant pairs only.';
+  $('scale').disabled = $('model').value !== 'clean';
+  if ($('scale').disabled) $('scale').value = '0';
+  const baseline = state.reference.own[`${state.run.source}|clean`].error;
+  $('scale-note').textContent = state.run.network === 'clean' ? `Unscaled own-wiring reference: ${baseline.toFixed(2)}° (16 headings).` : 'Switch to a clean network to explore the knife-edge.';
+  $('scale-value').textContent = `${state.run.scalePercent > 0 ? '+' : ''}${state.run.scalePercent.toFixed(1)}%`;
+  state.current = state.run.target;
+  state.points = layout(state.data[state.current].neurons, size.width, size.height);
+  $('tooltip').hidden = true;
+  $('neuron-count').textContent = `${state.data[state.current].neurons.length} neurons`;
+  const sourceName = state.index.names[state.run.source], targetName = state.index.names[state.run.target];
+  $('run-description').textContent = state.run.mode === 'own' ? `Own wiring: train and test on ${sourceName}. B is used for the diff overlay only.` : `Train on ${sourceName} → test on ${targetName}${state.run.refit ? ' · refitted cell-type gains' : ''}. Map and activity show wiring B.`;
+  $('cue-note').textContent = $('darkness').checked ? 'Shaded: cue on (steps 0–4)' : 'Cue stays on for all 40 steps';
   const theta = radians(+$('angle').value);
-  state.simulation = new Simulation(state.compiled[state.current], state.data[state.current].nets[$('model').value], {theta});
+  state.simulation = new Simulation(state.compiled[state.current], state.run.net, {...state.run.options, theta});
   state.trace = []; state.frame = null; state.activity = new Float64Array(state.simulation.wiring.n);
   state.lastStep = 0; state.running = true; state.dirty = true;
   $('cue-number').textContent = `${$('angle').value}°`; $('angle-value').textContent = `${$('angle').value}°`;
-  updateNumbers(); drawChart();
-}
-function comparisons() {
-  const choices = state.index.versions.filter(v => orientedDiff(state.diffs, state.current, v));
-  const previous = state.comparison;
-  $('compare').replaceChildren(...choices.map(v => new Option(state.index.names[v], v)));
-  if (!choices.length) $('compare').add(new Option('No same-fly comparison', ''));
-  state.comparison = choices.includes(previous) ? previous : choices[0] || null;
-  $('compare').value = state.comparison || ''; $('compare').disabled = !choices.length;
-  $('show-diff').disabled = !choices.length;
-  if (!choices.length) $('show-diff').checked = false;
+  const key = JSON.stringify([state.run.source,state.run.target,state.run.mode,state.run.network,state.run.refit,state.run.options]);
+  if (!benchmarks.has(key)) benchmarks.set(key, simulate(state.compiled[state.current], state.run.net, state.reference.theta, state.run.options).error);
+  const benchmark = benchmarks.get(key), reference = referenceFor(state.run, state.reference, state.refits);
+  $('benchmark-error').textContent = `${benchmark.toFixed(2)}°`;
+  $('reference-error').textContent = reference ? `${reference.value.toFixed(2)}°` : 'Not available';
+  $('reference-note').textContent = reference ? `${reference.source}. Same 16 headings and steps 5–39; difference ${Math.abs(benchmark-reference.value).toFixed(4)}°. The live run above uses one heading.` : 'No exported reference for these settings. Current settings are calculated over the same 16 headings and steps 5–39. The live run above uses one heading.';
+  drawConnections(); updateNumbers(); drawChart();
 }
 function chooseWiring() {
-  state.current = $('wiring').value; comparisons();
-  $('neuron-count').textContent = `${state.data[state.current].neurons.length} neurons`;
-  state.points = layout(state.data[state.current].neurons, size.width, size.height);
-  $('tooltip').hidden = true; drawConnections(); restart();
+  if (!state.current) state.current = $('wiring').value;
+  restart();
 }
 function resize() {
   size = fit(canvas); fit(dial); fit(chart);
@@ -207,7 +227,9 @@ canvas.addEventListener('pointermove', event => {
 });
 canvas.addEventListener('pointerleave', () => { $('tooltip').hidden = true; });
 $('wiring').addEventListener('change', chooseWiring);
-$('compare').addEventListener('change', () => { state.comparison = $('compare').value; drawConnections(); });
+$('compare').addEventListener('change', chooseWiring);
+for (const id of ['mode','refit','darkness']) $(id).addEventListener('change', restart);
+$('scale').addEventListener('input', restart);
 for (const id of ['all-edges', 'show-diff']) $(id).addEventListener('change', drawConnections);
 $('model').addEventListener('change', restart); $('angle').addEventListener('input', restart);
 $('reset').addEventListener('click', restart);
@@ -221,10 +243,11 @@ for (const [i, family] of families.entries()) {
   dot.className = 'family-dot'; dot.style.background = colors[i]; item.append(dot, family); $('family-legend').append(item);
 }
 try {
-  [state.index, state.diffs] = await Promise.all([fetchJSON('index'), fetchJSON('diffs')]);
+  [state.index, state.diffs, state.maps, state.refits, state.reference] = await Promise.all(['index','diffs','maps','refits','reference'].map(fetchJSON));
   const data = await Promise.all(state.index.versions.map(fetchJSON));
   for (const d of data) { state.data[d.version] = d; state.compiled[d.version] = compileWiring(d); }
-  $('wiring').replaceChildren(...state.index.versions.map(v => new Option(state.index.names[v], v)));
+  for (const id of ['wiring','compare']) { $(id).replaceChildren(...state.index.versions.map(v => new Option(state.index.names[v], v))); $(id).disabled = false; }
+  $('compare').value = 'fafb_buhmann';
   $('wiring').value = 'fafb'; $('wiring').disabled = false; $('play').disabled = false; $('reset').disabled = false;
   fit(dial); fit(chart); size = fit(canvas); chooseWiring();
   $('load-state').textContent = '● 7 wirings · local data'; requestAnimationFrame(animate);

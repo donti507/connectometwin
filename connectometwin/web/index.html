@@ -11,7 +11,7 @@
 <body>
   <header>
     <a class="brand" href="index.html"><span class="brand-mark">◎</span> ConnectomeTwin</a>
-    <span class="eyebrow">CIRCUIT EXPLORER <span class="tag">PHASE 03</span></span>
+    <span class="eyebrow">CIRCUIT EXPLORER <span class="tag">PHASE 04</span></span>
     <a href="self-check.html" class="check-link">Engine self-check ↗</a>
   </header>
   <main>
@@ -19,12 +19,16 @@
       <p class="subhead">Explore reconstructed connections and watch a trained circuit remember a heading.</p></div>
       <span id="load-state" role="status">Loading circuit data…</span></div>
     <section class="controls" aria-label="Circuit controls">
-      <label>Wiring<select id="wiring" disabled></select></label>
-      <label>Compare to<select id="compare" disabled></select></label>
+      <label>Wiring A · train<select id="wiring" disabled></select></label>
+      <label>Wiring B · test / compare<select id="compare" disabled></select></label>
+      <label>Mode<select id="mode"><option value="own">Own wiring (A)</option><option value="transplant">Train on A, test on B</option></select></label>
       <label>Trained model<select id="model"><option value="noise">Noise-trained</option><option value="clean">Clean</option></select></label>
       <label class="angle-control">Cued heading <output id="angle-value" for="angle">45°</output><input id="angle" type="range" min="-180" max="180" value="45" step="1"></label>
+      <label class="angle-control">Weight scale · clean only <output id="scale-value" for="scale">0.0%</output><input id="scale" type="range" min="-2" max="2" step="0.1" value="0" disabled><span id="scale-note">Switch to a clean network to explore the knife-edge.</span></label>
+      <div class="mode-options"><label><input type="checkbox" id="refit" disabled> Refit gains</label><span id="refit-note">Select a supported noise-trained transplant.</span><label><input type="checkbox" id="darkness" checked> Darkness after step 5</label></div>
       <div class="transport"><button id="play" disabled>Pause</button><button id="reset" class="secondary" disabled>Restart ↺</button></div>
     </section>
+    <p id="run-description" class="run-description" role="status"></p>
     <div class="dashboard">
       <section class="panel network-panel" aria-labelledby="network-title">
         <div class="panel-heading"><div><p class="eyebrow">01 / STRUCTURE & ACTIVITY</p><h2 id="network-title">Connection map</h2></div><span id="neuron-count" class="metric">— neurons</span></div>
@@ -44,12 +48,14 @@
         </section>
         <section class="panel error-panel" aria-labelledby="error-title">
           <div class="panel-heading"><div><p class="eyebrow">03 / MEMORY OVER TIME</p><h2 id="error-title">Heading error</h2></div><div class="error-metric"><strong id="mean-error">—</strong><span>mean after cue</span></div></div>
+          <p class="current-error">Current error <strong id="current-error">—</strong></p>
           <canvas id="error-chart" aria-label="Absolute wrapped heading error from 0 to 180 degrees over 40 model steps"></canvas>
-          <div class="run-footer"><span id="step-number">Step — / 39</span><span>Shaded: cue on (steps 0–4)</span></div>
+          <div class="run-footer"><span id="step-number">Step — / 39</span><span id="cue-note">Shaded: cue on (steps 0–4)</span></div>
+          <div class="benchmark"><p class="eyebrow">16-HEADING COMPARISON · STEPS 5–39</p><div>Current settings <strong id="benchmark-error">—</strong></div><div>Paper-model reference <strong id="reference-error">—</strong></div><p id="reference-note">Reference values use 16 headings, not only the displayed cue angle.</p></div>
         </section>
       </div>
     </div>
-    <footer><span>Each run uses the selected wiring’s own trained parameters. Cue for 5 steps, then 35 steps of memory.</span><span>Vanilla JS + Canvas · all data local</span></footer>
+    <footer><span>Own wiring runs on A. Transplant runs A’s mapped parameters on B’s connections. All errors are wrapped angular errors in degrees.</span><span>Vanilla JS + Canvas · all data local</span></footer>
     <p id="error-message" role="alert" hidden></p>
     <noscript>This explorer requires JavaScript. Serve this directory with a static HTTP server.</noscript>
   </main>
