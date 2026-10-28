@@ -10,7 +10,7 @@ One static web page (`web/index.html`, vanilla JS + Canvas, no build step) hoste
 - Phase 3 (visualization): DONE. Static Canvas explorer in `web/index.html`, with family rings, connection/diff layers, live EPG activity, heading dial and error trace. Browser reference gate in `web/self-check.html`.
 - Phase 4 (interactions): DONE. Independent A/B selectors, own/transplant modes, clean/noise networks, ±2% clean weight scaling, supported noise-trained refits, cue/darkness and playback controls. Current-run errors are separated from the matching 16-heading reference benchmark.
 - Phase 5 (guided story): DONE. Five-step Next/Back tour applies controls automatically; step 5 includes detector and filtering-only examples. Study results and local demo values are labelled separately. Research links and original data credits are in the footer.
-- Phase 6: TODO. Theme/deployment remain future work.
+- Phase 6: IMPLEMENTED. System/light/dark themes, phone/laptop layouts, keyboard-accessible controls and neuron details, lazy A/B wiring loads, worker benchmarks, screenshot/citation docs and a GitHub Pages workflow. Local/browser validation completed; Pages must be enabled and its deployment succeed before treating the public site as live. External promotion is not performed by this repository workflow.
 
 ## Data contract (`web/data/`)
 - `index.json`: versions, display names, model equations, base fly for same-fly variants.

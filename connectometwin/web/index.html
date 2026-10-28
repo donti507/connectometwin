@@ -3,18 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="light dark">
   <title>ConnectomeTwin · Circuit explorer</title>
   <link rel="stylesheet" href="style.css">
+  <script type="module" src="js/theme.mjs"></script>
   <script type="module" src="js/app.mjs"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to explorer</a>
   <header>
     <a class="brand" href="index.html"><span class="brand-mark">◎</span> ConnectomeTwin</a>
-    <span class="eyebrow">CIRCUIT EXPLORER <span class="tag">PHASE 05</span></span>
+    <span class="eyebrow">CIRCUIT EXPLORER <span class="tag">PHASE 06</span></span>
+    <label class="theme-control" for="theme">Theme<select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
     <a href="self-check.html" class="check-link">Engine self-check ↗</a>
   </header>
-  <main>
+  <main id="main" tabindex="-1">
     <div class="intro"><div><p class="eyebrow">FLY COMPASS CONNECTOME</p><h1>One circuit. Different wiring.</h1>
       <p class="subhead">Explore reconstructed connections and watch a trained circuit remember a heading.</p></div>
       <span id="load-state" role="status">Loading circuit data…</span></div>
@@ -30,21 +33,24 @@
       <details class="tour-sources"><summary>Study results and demo values</summary><p>The study’s noise-trained, seed-0 results use 2,000 random headings; this rounded demo uses 16 fixed headings. Both show the same pattern; their values are labelled separately.</p><table><caption>Error in degrees · noise-trained, seed 0</caption><thead><tr><th scope="col">Experiment</th><th scope="col">Study results</th><th scope="col">This demo</th></tr></thead><tbody id="tour-source-values"></tbody></table><a id="study-results-link" href="https://github.com/donti507/chessfly">Study result table ↗</a></details>
     </section>
     <section class="controls" aria-label="Circuit controls">
-      <label>Wiring A · train<select id="wiring" disabled></select></label>
-      <label>Wiring B · test / compare<select id="compare" disabled></select></label>
-      <label>Mode<select id="mode"><option value="own">Own wiring (A)</option><option value="transplant">Train on A, test on B</option></select></label>
-      <label>Trained model<select id="model"><option value="noise">Noise-trained</option><option value="clean">Clean</option></select></label>
-      <label class="angle-control">Cued heading <output id="angle-value" for="angle">45°</output><input id="angle" type="range" min="-180" max="180" value="45" step="1"></label>
-      <label class="angle-control">Weight scale · clean only <output id="scale-value" for="scale">0.0%</output><input id="scale" type="range" min="-2" max="2" step="0.1" value="0" disabled><span id="scale-note">Switch to a clean network to explore the knife-edge.</span></label>
+      <label for="wiring">Wiring A · train<select id="wiring" disabled></select></label>
+      <label for="compare">Wiring B · test / compare<select id="compare" disabled></select></label>
+      <label for="mode">Mode<select id="mode"><option value="own">Own wiring (A)</option><option value="transplant">Train on A, test on B</option></select></label>
+      <label for="model">Trained model<select id="model"><option value="noise">Noise-trained</option><option value="clean">Clean</option></select></label>
+      <label class="angle-control" for="angle">Cued heading <output id="angle-value" for="angle">45°</output><input id="angle" type="range" min="-180" max="180" value="45" step="1"></label>
+      <label class="angle-control" for="scale">Weight scale · clean only <output id="scale-value" for="scale">0.0%</output><input id="scale" type="range" min="-2" max="2" step="0.1" value="0" disabled><span id="scale-note">Switch to a clean network to explore the knife-edge.</span></label>
       <div class="mode-options"><label><input type="checkbox" id="refit" disabled> Refit gains</label><span id="refit-note">Select a supported noise-trained transplant.</span><label><input type="checkbox" id="darkness" checked> Darkness after step 5</label></div>
       <div class="transport"><button id="play" disabled>Pause</button><button id="reset" class="secondary" disabled>Restart ↺</button></div>
     </section>
+    <p class="keyboard-help">Keyboard: Tab between controls; arrow keys adjust selectors and sliders. Outside controls, Space plays/pauses and R restarts. <span id="run-announcement" role="status"></span></p>
     <p id="run-description" class="run-description" role="status"></p>
     <div class="dashboard">
       <section class="panel network-panel" aria-labelledby="network-title">
         <div class="panel-heading"><div><p class="eyebrow">01 / STRUCTURE & ACTIVITY</p><h2 id="network-title">Connection map</h2></div><span id="neuron-count" class="metric">— neurons</span></div>
         <div class="view-options"><label><input type="checkbox" id="all-edges"> All connections</label><label><input type="checkbox" id="show-diff"> Diff overlay</label></div>
-        <div class="network-wrap"><canvas id="network" aria-label="Neurons arranged by family and angle, with connections and live EPG activity"></canvas><div id="tooltip" role="tooltip" hidden></div></div>
+        <div class="network-wrap"><canvas id="network" tabindex="0" role="img" aria-describedby="network-help neuron-details" aria-label="Neurons arranged by family and angle, with connections and live EPG activity"></canvas><div id="tooltip" role="tooltip" hidden></div></div>
+        <p id="network-help" class="panel-note">Focus the map and use ← / → to inspect neurons; Home / End jump to the first / last. Hover or tap a neuron for details.</p>
+        <p id="neuron-details" class="panel-note" role="status">No neuron selected.</p>
         <div id="family-legend" class="family-legend"></div>
         <div class="edge-legend"><span><i class="line positive"></i>Excitatory</span><span><i class="line negative"></i>Inhibitory</span><span><i class="glow"></i>EPG activity</span><span>◇ Missing angle</span></div>
         <div id="diff-legend" class="edge-legend" hidden><span><i class="line added"></i>Added</span><span><i class="line removed"></i>Removed</span><span><i class="line changed"></i>Changed · width ∝ |log ratio|</span></div>
@@ -53,14 +59,14 @@
       <div class="right-column">
         <section class="panel heading-panel" aria-labelledby="heading-title">
           <div class="panel-heading"><div><p class="eyebrow">02 / DECODED HEADING</p><h2 id="heading-title">The circuit’s compass</h2></div><span id="cue-state" class="tag">READY</span></div>
-          <canvas id="dial" aria-label="Heading dial comparing cued and decoded angles"></canvas>
+          <canvas id="dial" role="img" aria-label="Heading dial comparing cued and decoded angles"></canvas>
           <div class="heading-values"><div><span class="cue-dot">●</span> Cued <strong id="cue-number">45°</strong></div><div><span class="decoded-dot">●</span> Decoded <strong id="decoded-number">—</strong></div></div>
           <p class="panel-note">Solid orange: target heading. Dashed after the cue disappears. Teal: circuit readout.</p>
         </section>
         <section class="panel error-panel" aria-labelledby="error-title">
           <div class="panel-heading"><div><p class="eyebrow">03 / MEMORY OVER TIME</p><h2 id="error-title">Heading error</h2></div><div class="error-metric"><strong id="mean-error">—</strong><span>mean after cue</span></div></div>
           <p class="current-error">Current error <strong id="current-error">—</strong></p>
-          <canvas id="error-chart" aria-label="Absolute wrapped heading error from 0 to 180 degrees over 40 model steps"></canvas>
+          <canvas id="error-chart" role="img" aria-label="Absolute wrapped heading error from 0 to 180 degrees over 40 model steps"></canvas>
           <div class="run-footer"><span id="step-number">Step — / 39</span><span id="cue-note">Shaded: cue on (steps 0–4)</span></div>
           <div class="benchmark"><p class="eyebrow">16-HEADING COMPARISON · STEPS 5–39</p><div>Current settings <strong id="benchmark-error">—</strong></div><div>Paper-model reference <strong id="reference-error">—</strong></div><p id="reference-note">Reference values use 16 headings, not only the displayed cue angle.</p></div>
         </section>

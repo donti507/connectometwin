@@ -4,7 +4,7 @@ Interactive companion to *Reconstruction differences rival individual difference
 
 Compare two reconstructions of the same fly circuit, see which connections changed, and watch a trained network hold, or lose, a heading on each wiring.
 
-Status: Phases 0–5 complete. See `docs/ROADMAP.md`.
+Status: Phases 0–6 implemented; Pages deployment must succeed before claiming the site is live. See `docs/ROADMAP.md`.
 
 ## Simulation engine (Phase 2)
 
@@ -47,10 +47,11 @@ smoke test.
 From the repository root, serve the page without a build step:
 
 ```sh
-python3 -m http.server 8000 --directory connectometwin/web
+cd connectometwin/web
+python -m http.server 8000
 ```
 
-Open the server's `index.html`. The page uses vanilla JavaScript, Canvas, system
+Open the server's `index.html`. Return to the repository root before running the test commands below. The page uses vanilla JavaScript, Canvas, system
 fonts and local JSON only; no CDN or external network requests are required.
 Select wiring A/B, own or transplant mode, and clean or noise-trained parameters. Runs animate at
 browser refresh rate, with one model timestep every 100 ms and smooth EPG glow
@@ -74,8 +75,10 @@ node connectometwin/tests/engine.test.mjs
 node connectometwin/tests/view.test.mjs
 node connectometwin/tests/run.test.mjs
 node connectometwin/tests/tour.test.mjs
+node connectometwin/tests/data.test.mjs
 # Optional: requires Playwright, Chromium, and the static server above.
 node connectometwin/tests/browser.cjs
+node connectometwin/tests/release.cjs
 ```
 
 The browser check covers all wirings, diff direction, connection limits,
@@ -157,3 +160,44 @@ Original datasets retain their providers' licenses.
 benchmarks and the filtering example. The browser test walks Next/Back, switches
 step-5 examples, finishes/restarts/exits through manual changes, and checks
 credits, source links and mobile layout.
+
+## Themes, loading, accessibility and deployment (Phase 6)
+
+![Dark-mode explorer with ring activity and heading/error panels](docs/images/explorer.png)
+
+See the [repository README](../README.md) for local startup, the BibTeX citation,
+keyboard commands, performance measurements and Settings → Pages instructions.
+The workflow at `.github/workflows/pages.yml` uploads `connectometwin/web/` as the
+Pages artifact root after running every `tests/*.test.mjs` suite with Node 24.
+It requires no build and performs no automatic edits to the study repository or
+external posts. Deployment and live-site verification are separate from setup.
+
+`theme.mjs` follows system light/dark changes, with a persisted explicit override;
+CSS has a system-aware fallback before JavaScript initializes. Canvas layers use
+the same theme tokens. Text is larger, controls have explicit/native labels and
+visible focus, and the map offers keyboard/touch details as well as hover.
+A skip link, textual errors, completion announcement and reduced-motion startup
+are included. Release checks verify core text-token contrast ≥4.5:1, but this is
+not a claim of a complete accessibility audit.
+
+`data.mjs` loads only selected A/B wirings, caches in-flight promises and compiled
+CSR arrays, and evicts failures so they can be retried. Each asynchronous run has
+a request ID; older selections cannot replace the latest run. Only metadata and
+the default FlyWire pair are loaded initially. Benchmarks run in a module worker
+and are cached by model configuration; changing settings cancels old workers.
+The browser reference self-check intentionally loads all seven wirings because
+it tests every model. The engine and numerical data remain unchanged.
+
+`release.cjs` tests system/explicit theme persistence, both Canvas palettes,
+contrast tokens, keyboard controls and details, accessible input names, loading
+races/cache, reduced motion, phone/laptop overflow and 4×-throttled animation.
+It captures the real application screenshot; regenerate it with:
+
+```sh
+SCREENSHOT_PATH="$PWD/connectometwin/docs/images/explorer.png" \
+  node connectometwin/tests/release.cjs
+```
+
+The measured 4× CPU results (58.3/60.4 fps default/all edges) are a synthetic
+performance check, not measurements on a physical mid-range laptop. Test with
+normal and all-edge views on your target device when assessing hardware limits.

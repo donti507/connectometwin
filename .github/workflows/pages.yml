@@ -1,0 +1,50 @@
+name: Validate and deploy ConnectomeTwin
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'connectometwin/web/**'
+      - 'connectometwin/tests/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate model, controls, tour and loading
+        run: |
+          for test in connectometwin/tests/*.test.mjs; do
+            node "$test"
+          done
+      - name: Upload static web folder
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: connectometwin/web
+
+  deploy:
+    needs: validate-and-package
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

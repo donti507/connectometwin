@@ -1,7 +1,8 @@
-import {compileWiring, Simulation, simulate, wrapped} from './engine.mjs';
-import {families, colors, layout, strongestEdges, orientedDiff, ratioWidth} from './view.mjs';
+import {compileWiring, Simulation, wrapped} from './engine.mjs';
+import {families, colors as defaultColors, layout, strongestEdges, orientedDiff, ratioWidth} from './view.mjs';
 import {configureRun, referenceFor} from './run.mjs';
 import {buildTour, study} from './tour.mjs';
+import {createWiringLoader} from './data.mjs';
 const $ = id => document.getElementById(id);
 const radians = degrees => degrees * Math.PI / 180;
 const degrees = angle => angle * 180 / Math.PI;
@@ -16,6 +17,22 @@ const layer = document.createElement('canvas');
 const canvas = $('network'), dial = $('dial'), chart = $('error-chart');
 const ctx = canvas.getContext('2d'), dialCtx = dial.getContext('2d'), chartCtx = chart.getContext('2d');
 let size = {width: 0, height: 0, dpr: 1};
+let colors = [...defaultColors], palette = {}, request = 0, worker = null;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const loadWiring = createWiringLoader(fetchJSON,compileWiring);
+async function ensureWiring(version) {
+  const loaded = await loadWiring(version);
+  state.data[version] = loaded.data; state.compiled[version] = loaded.compiled;
+}
+function updatePalette() {
+  const style = getComputedStyle(document.documentElement);
+  for (const token of ['surface','muted-text','canvas-grid','canvas-ring','cue','accent','text','positive','negative','added','removed','changed','cue-shade']) palette[token] = style.getPropertyValue(`--${token}`).trim();
+  colors = families.map((_,i) => style.getPropertyValue(`--family-${i}`).trim());
+  document.querySelectorAll('.family-dot').forEach((dot,i)=>{dot.style.background=colors[i];});
+  drawConnections(); drawDial(); drawChart(); state.dirty = true;
+}
+window.addEventListener('themechange',updatePalette);
+updatePalette();
 function fail(error) {
   console.error(error); state.running = false;
   $('error-message').textContent = `${error.message}. Serve web/ with a static HTTP server, then reload to retry.`;
@@ -33,24 +50,24 @@ function line(context, a, b, color, width = 1) {
   context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.stroke();
 }
 function drawConnections() {
-  if (!state.current || !size.width) return;
+  if (!state.current || !size.width || state.loading) return;
   const data = state.data[state.current], points = state.points;
   layer.width = canvas.width; layer.height = canvas.height;
   const context = layer.getContext('2d'); context.scale(size.dpr, size.dpr);
-  context.fillStyle = '#16201c'; context.fillRect(0, 0, size.width, size.height);
+  context.fillStyle = palette['surface']; context.fillRect(0, 0, size.width, size.height);
   const maxRadius = Math.max(1, Math.min(size.width, size.height) / 2 - 36);
   families.forEach((family, ring) => {
     const radius = maxRadius * (0.30 + ring * 0.135);
-    context.strokeStyle = '#34453a'; context.lineWidth = 0.6;
+    context.strokeStyle = palette['canvas-ring']; context.lineWidth = 0.6;
     context.beginPath(); context.arc(size.width / 2, size.height / 2, radius, 0, Math.PI * 2); context.stroke();
-    context.fillStyle = colors[ring]; context.font = '9px system-ui'; context.textAlign = 'center';
+    context.fillStyle = colors[ring]; context.font = '12px system-ui'; context.textAlign = 'center';
     context.fillText(family, size.width / 2, size.height / 2 - radius - 5);
   });
   const all = $('all-edges').checked, ids = strongestEdges(data.edges, all);
   context.globalAlpha = all ? 0.10 : 0.24;
   for (const i of ids) {
     const weight = data.edges.w[i];
-    line(context, points[data.edges.pre[i]], points[data.edges.post[i]], weight >= 0 ? '#789b90' : '#ab7390', all ? 0.45 : 0.65);
+    line(context, points[data.edges.pre[i]], points[data.edges.post[i]], weight >= 0 ? palette['positive'] : palette['negative'], all ? 0.45 : 0.65);
   }
   context.globalAlpha = 1;
   const missing = points.filter(p => p.fallback).length;
@@ -68,9 +85,9 @@ function drawConnections() {
       const key = `${d.edges.pre[i]}:${d.edges.post[i]}`;
       strength.set(key, Math.max(strength.get(key) || 0, Math.abs(d.edges.w[i])));
     }
-    const overlay = [ ...diff.added.map(pair => ({pair, color: '#60e795', width: 1.1})),
-      ...diff.removed.map(pair => ({pair, color: '#fa7272', width: 1.1})),
-      ...diff.changed.map((pair, i) => ({pair, color: '#e6bb67', width: ratioWidth(diff.changed_ratio[i])})) ];
+    const overlay = [ ...diff.added.map(pair => ({pair, color: palette['added'], width: 1.1})),
+      ...diff.removed.map(pair => ({pair, color: palette['removed'], width: 1.1})),
+      ...diff.changed.map((pair, i) => ({pair, color: palette['changed'], width: ratioWidth(diff.changed_ratio[i])})) ];
     if (!all) overlay.sort((a, b) => (strength.get(b.pair.join(':')) || 0) - (strength.get(a.pair.join(':')) || 0));
     const shown = all ? overlay : overlay.slice(0, 1200);
     context.globalAlpha = all ? 0.23 : 0.5;
@@ -91,7 +108,7 @@ function drawNetwork() {
     if (intensity > 0.03) {
       const radius = 4 + 12 * intensity;
       const glow = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
-      glow.addColorStop(0, `rgba(104,224,189,${0.75 * intensity})`); glow.addColorStop(1, 'rgba(104,224,189,0)');
+      glow.addColorStop(0, colors[0] + Math.round(190 * intensity).toString(16).padStart(2,'0')); glow.addColorStop(1, colors[0]+'00');
       ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(point.x, point.y, radius, 0, Math.PI * 2); ctx.fill();
     }
     ctx.fillStyle = colors[point.ring];
@@ -102,18 +119,20 @@ function drawNetwork() {
       ctx.beginPath(); ctx.arc(point.x, point.y, 1.6 + intensity * 2.2, 0, Math.PI * 2); ctx.fill();
     }
   });
+  const selected = state.points[selectedNeuron];
+  if (selected) { ctx.strokeStyle=palette.cue;ctx.lineWidth=2;ctx.beginPath();ctx.arc(selected.x,selected.y,7,0,Math.PI*2);ctx.stroke(); }
 }
 function drawDial() {
   const {width, height} = dial.getBoundingClientRect();
   dialCtx.clearRect(0, 0, width, height);
   const center = {x: width / 2, y: height / 2}, radius = Math.min(width / 2 - 45, height / 2 - 25);
-  dialCtx.strokeStyle = '#405247'; dialCtx.lineWidth = 1;
+  dialCtx.strokeStyle = palette['canvas-ring']; dialCtx.lineWidth = 1;
   dialCtx.beginPath(); dialCtx.arc(center.x, center.y, radius, 0, Math.PI * 2); dialCtx.stroke();
   for (let i = 0; i < 36; i++) {
     const angle = i * Math.PI / 18, major = i % 9 === 0;
     const point = r => ({x: center.x + Math.cos(angle) * r, y: center.y - Math.sin(angle) * r});
-    line(dialCtx, point(radius - (major ? 8 : 4)), point(radius), '#50685a');
-    if (major) { const p = point(radius + 14); dialCtx.fillStyle = '#9baea6'; dialCtx.font = '10px system-ui'; dialCtx.textAlign = 'center'; dialCtx.textBaseline = 'middle'; dialCtx.fillText(`${i === 27 ? -90 : i * 10}°`, p.x, p.y); }
+    line(dialCtx, point(radius - (major ? 8 : 4)), point(radius), palette['canvas-grid']);
+    if (major) { const p = point(radius + 14); dialCtx.fillStyle = palette['muted-text']; dialCtx.font = '12px system-ui'; dialCtx.textAlign = 'center'; dialCtx.textBaseline = 'middle'; dialCtx.fillText(`${i === 27 ? -90 : i * 10}°`, p.x, p.y); }
   }
   const target = radians(+$('angle').value);
   const needle = (angle, color, length, dashed) => {
@@ -121,27 +140,27 @@ function drawDial() {
     line(dialCtx, center, {x: center.x + Math.cos(angle) * length, y: center.y - Math.sin(angle) * length}, color, 2.5);
     dialCtx.setLineDash([]);
   };
-  needle(target, '#ffb378', radius - 11, state.frame && state.frame.t >= state.run.options.cueSteps);
-  if (state.frame) needle(state.frame.heading, '#68e0bd', radius - 22, false);
-  dialCtx.fillStyle = '#e9eee9'; dialCtx.beginPath(); dialCtx.arc(center.x, center.y, 3, 0, Math.PI * 2); dialCtx.fill();
+  needle(target, palette['cue'], radius - 11, state.frame && state.frame.t >= state.run.options.cueSteps);
+  if (state.frame) needle(state.frame.heading, palette['accent'], radius - 22, false);
+  dialCtx.fillStyle = palette['text']; dialCtx.beginPath(); dialCtx.arc(center.x, center.y, 3, 0, Math.PI * 2); dialCtx.fill();
 }
 function drawChart() {
   const {width, height} = chart.getBoundingClientRect();
   const left = 43, right = width - 24, top = 15, bottom = height - 32;
   const x = t => left + t / 39 * (right - left), y = error => bottom - error / 180 * (bottom - top);
   chartCtx.clearRect(0, 0, width, height);
-  chartCtx.fillStyle = '#ffb3780c'; chartCtx.fillRect(left, top, x(state.run?.options.cueSteps === 40 ? 39 : 4.5) - left, bottom - top);
-  chartCtx.font = '9px system-ui'; chartCtx.textBaseline = 'middle';
+  chartCtx.fillStyle = palette['cue-shade']; chartCtx.fillRect(left, top, x(state.run?.options.cueSteps === 40 ? 39 : 4.5) - left, bottom - top);
+  chartCtx.font = '12px system-ui'; chartCtx.textBaseline = 'middle';
   for (const error of [0, 60, 120, 180]) {
-    line(chartCtx, {x: left, y: y(error)}, {x: right, y: y(error)}, '#2d3d33', 0.6);
-    chartCtx.fillStyle = '#9baea6'; chartCtx.textAlign = 'right'; chartCtx.fillText(`${error}°`, left - 9, y(error));
+    line(chartCtx, {x: left, y: y(error)}, {x: right, y: y(error)}, palette['canvas-grid'], 0.6);
+    chartCtx.fillStyle = palette['muted-text']; chartCtx.textAlign = 'right'; chartCtx.fillText(`${error}°`, left - 9, y(error));
   }
   for (const t of [0, 5, 10, 20, 30, 39]) { chartCtx.textAlign = 'center'; chartCtx.fillText(t, x(t), bottom + 15); }
-  chartCtx.strokeStyle = '#68e0bd'; chartCtx.lineWidth = 1.8; chartCtx.beginPath();
+  chartCtx.strokeStyle = palette['accent']; chartCtx.lineWidth = 1.8; chartCtx.beginPath();
   state.trace.forEach((error, t) => t ? chartCtx.lineTo(x(t), y(error)) : chartCtx.moveTo(x(t), y(error)));
   chartCtx.stroke();
   if (state.trace.length) {
-    chartCtx.fillStyle = '#68e0bd'; chartCtx.beginPath(); chartCtx.arc(x(state.trace.length - 1), y(state.trace.at(-1)), 3, 0, Math.PI * 2); chartCtx.fill();
+    chartCtx.fillStyle = palette['accent']; chartCtx.beginPath(); chartCtx.arc(x(state.trace.length - 1), y(state.trace.at(-1)), 3, 0, Math.PI * 2); chartCtx.fill();
   }
 }
 function updateNumbers() {
@@ -160,9 +179,20 @@ function selection() {
     darkness:$('darkness').checked};
 }
 const benchmarks = new Map();
-function restart() {
-  if (!state.current) return;
-  state.run = configureRun(state.data, state.maps, state.refits, selection());
+async function restart() {
+  if (!state.index) return false;
+  const ticket = ++request, selected = selection();
+  state.loading = true; state.running = false;
+  document.body.dataset.ready = 'loading'; document.body.dataset.benchmark = 'loading';
+  $('load-state').textContent = 'Loading selected wirings…';
+  $('play').disabled = true; $('reset').disabled = true;
+  worker?.terminate(); worker = null;
+  try { await Promise.all([...new Set([selected.a,selected.b])].map(ensureWiring)); }
+  catch (error) { if (ticket === request) { state.loading=false; fail(error); } return false; }
+  if (ticket !== request) return false;
+  state.loading = false;
+  $('error-message').hidden = true;
+  state.run = configureRun(state.data, state.maps, state.refits, selected);
   $('refit').disabled = !state.run.refitAvailable;
   if (!state.run.refitAvailable) $('refit').checked = false;
   $('refit-note').textContent = state.run.refitAvailable ? 'Cell-type gains fitted for this directed pair.' : 'Available for exported noise-trained transplant pairs only.';
@@ -172,6 +202,8 @@ function restart() {
   $('scale-note').textContent = state.run.network === 'clean' ? `Unscaled own-wiring reference: ${baseline.toFixed(2)}° (16 headings).` : 'Switch to a clean network to explore the knife-edge.';
   $('scale-value').textContent = `${state.run.scalePercent > 0 ? '+' : ''}${state.run.scalePercent.toFixed(1)}%`;
   state.current = state.run.target;
+  selectedNeuron = -1; $('neuron-details').textContent = 'No neuron selected.';
+  $('run-announcement').textContent = '';
   state.points = layout(state.data[state.current].neurons, size.width, size.height);
   $('tooltip').hidden = true;
   $('neuron-count').textContent = `${state.data[state.current].neurons.length} neurons`;
@@ -184,33 +216,47 @@ function restart() {
   state.lastStep = 0; state.running = true; state.dirty = true;
   $('cue-number').textContent = `${$('angle').value}°`; $('angle-value').textContent = `${$('angle').value}°`;
   const key = JSON.stringify([state.run.source,state.run.target,state.run.mode,state.run.network,state.run.refit,state.run.options]);
-  if (!benchmarks.has(key)) benchmarks.set(key, simulate(state.compiled[state.current], state.run.net, state.reference.theta, state.run.options).error);
-  const benchmark = benchmarks.get(key), reference = referenceFor(state.run, state.reference, state.refits);
-  $('benchmark-error').textContent = `${benchmark.toFixed(2)}°`;
+  const reference = referenceFor(state.run, state.reference, state.refits);
+  $('benchmark-error').textContent = 'Calculating…';
   $('reference-error').textContent = reference ? `${reference.value.toFixed(2)}°` : 'Not available';
-  $('reference-note').textContent = reference ? `${reference.source}. Same 16 headings and steps 5–39; difference ${Math.abs(benchmark-reference.value).toFixed(4)}°. The live run above uses one heading.` : 'No exported reference for these settings. Current settings are calculated over the same 16 headings and steps 5–39. The live run above uses one heading.';
+  const showBenchmark = benchmark => {
+    if (ticket !== request) return;
+    benchmarks.set(key,benchmark); $('benchmark-error').textContent = `${benchmark.toFixed(2)}°`;
+    $('reference-note').textContent = reference ? `${reference.source}. Same 16 headings and steps 5–39; difference ${Math.abs(benchmark-reference.value).toFixed(4)}°. The live run above uses one heading.` : 'No exported reference for these settings. Current settings are calculated over the same 16 headings and steps 5–39. The live run above uses one heading.';
+    document.body.dataset.benchmark = 'ready';
+  };
+  if (benchmarks.has(key)) showBenchmark(benchmarks.get(key));
+  else {
+    $('reference-note').textContent = 'Calculating the 16-heading benchmark in the background…';
+    worker = new Worker(new URL('./benchmark-worker.mjs',import.meta.url),{type:'module'});
+    const currentWorker = worker;
+    worker.onmessage = ({data}) => { currentWorker.terminate(); if (ticket !== request) return; worker=null; if (data.failure) fail(new Error(data.failure)); else showBenchmark(data.error); };
+    worker.onerror = () => { currentWorker.terminate(); if (ticket !== request) return; worker=null;fail(new Error('Benchmark calculation failed')); };
+    worker.postMessage({wiring:state.compiled[state.current],net:state.run.net,theta:state.reference.theta,options:state.run.options});
+  }
+  $('play').disabled = false; $('reset').disabled = false;
+  $('load-state').textContent = `● 7 wirings available · ${Object.keys(state.data).length} loaded`;
+  document.body.dataset.ready = 'ready';
   drawConnections(); updateNumbers(); drawChart();
+  return true;
 }
-function chooseWiring() {
-  if (!state.current) state.current = $('wiring').value;
-  restart();
-}
+function chooseWiring() { return restart(); }
 function resize() {
   size = fit(canvas); fit(dial); fit(chart);
   if (state.current) state.points = layout(state.data[state.current].neurons, size.width, size.height);
   drawConnections(); drawDial(); drawChart(); state.dirty = true;
 }
 function animate(now) {
-  if (state.running && state.simulation && (!state.lastStep || now - state.lastStep >= 100)) {
+  if (!document.hidden && state.running && state.simulation && (!state.lastStep || now - state.lastStep >= 100)) {
     state.frame = state.simulation.step(); state.lastStep = now;
     state.trace.push(Math.abs(degrees(wrapped(state.frame.heading - state.simulation.theta))));
-    if (state.simulation.t >= 40) state.running = false;
+    if (state.simulation.t >= 40) { state.running = false; $('run-announcement').textContent = 'Run complete. Final error and mean are shown below.'; }
     updateNumbers(); drawChart(); state.dirty = true;
   }
   let smoothing = false;
   if (state.frame) for (let i = 0; i < state.activity.length; i++) {
     const difference = Math.max(0, state.frame.activity[i]) - state.activity[i];
-    state.activity[i] += difference * 0.3;
+    state.activity[i] += difference * (reduceMotion.matches ? 1 : 0.3);
     if (Math.abs(difference) > 0.0001) smoothing = true;
   }
   if (state.dirty || smoothing) { drawNetwork(); drawDial(); state.dirty = false; }
@@ -227,6 +273,31 @@ canvas.addEventListener('pointermove', event => {
   tooltip.style.left = `${Math.max(0, Math.min(rect.width - 235, x + 12))}px`; tooltip.style.top = `${Math.min(rect.height - 100, y + 12)}px`;
 });
 canvas.addEventListener('pointerleave', () => { $('tooltip').hidden = true; });
+let selectedNeuron = -1;
+function describeNeuron(index) {
+  const neuron = state.data[state.current]?.neurons[index];
+  if (!neuron) return;
+  selectedNeuron = index; state.dirty=true;
+  $('neuron-details').textContent = `Neuron ${index+1} of ${state.points.length}: ${neuron.type}, ${neuron.family}, ID ${neuron.id}. ${state.points[index].fallback ? 'Angle unavailable; fallback position.' : `Angle ${degrees(neuron.angle).toFixed(1)} degrees.`} Activity ${Math.max(0,state.frame?.activity[index] || 0).toFixed(3)}.`;
+}
+canvas.addEventListener('keydown',event=>{
+  if (!state.points.length || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  event.preventDefault();
+  const count = state.points.length;
+  const index = event.key === 'Home' ? 0 : event.key === 'End' ? count-1 : event.key === 'ArrowRight' ? (selectedNeuron+1)%count : (selectedNeuron-1+count)%count;
+  describeNeuron(index);
+});
+canvas.addEventListener('click', event=>{
+  const rect=canvas.getBoundingClientRect();let nearest=-1,distance=14;
+  state.points.forEach((point,i)=>{const d=Math.hypot(point.x-(event.clientX-rect.left),point.y-(event.clientY-rect.top));if(d<distance){distance=d;nearest=i;}});
+  if(nearest>=0) describeNeuron(nearest);
+});
+document.addEventListener('keydown',event=>{
+  if(event.altKey || event.ctrlKey || event.metaKey || event.repeat || event.target.closest('input,select,textarea,button,a,summary,[contenteditable]')) return;
+  if(event.code==='Space' && !$('play').disabled){event.preventDefault();$('play').click();}
+  if(event.key.toLowerCase()==='r' && !$('reset').disabled){event.preventDefault();$('reset').click();}
+});
+
 const tour = {index:-1, filtering:false};
 function endTour() {
   tour.index = -1; tour.filtering = false;
@@ -237,13 +308,15 @@ function endTour() {
   $('tour-exit').hidden = true; $('tour-examples').hidden = true;
   $('tour-number-note').hidden = true;
 }
-function applyTour(index) {
+async function applyTour(index) {
   const steps = buildTour(state.reference,state.refits,state.diffs,tour.filtering);
   tour.index = Math.max(0,Math.min(steps.length-1,index));
   const step = steps[tour.index], settings = step.settings;
   for (const [id,value] of Object.entries({wiring:settings.a,compare:settings.b,mode:settings.mode,model:settings.network,angle:settings.angle,scale:settings.scalePercent})) $(id).value = value;
   for (const [id,value] of Object.entries({refit:settings.refit,darkness:settings.darkness,'show-diff':settings.diff,'all-edges':settings.allEdges})) $(id).checked = value;
-  chooseWiring(); state.running = settings.playing; updateNumbers();
+  const tourStep = tour.index;
+  if (!await chooseWiring() || tour.index !== tourStep) return;
+  state.running = settings.playing; updateNumbers();
   $('tour-progress').textContent = `GUIDED TOUR · STEP ${tour.index+1} OF ${steps.length}`;
   $('tour-title').textContent = step.title; $('tour-caption').textContent = step.caption;
   $('tour-back').disabled = tour.index === 0;
@@ -278,12 +351,11 @@ for (const [i, family] of families.entries()) {
 }
 try {
   [state.index, state.diffs, state.maps, state.refits, state.reference] = await Promise.all(['index','diffs','maps','refits','reference'].map(fetchJSON));
-  const data = await Promise.all(state.index.versions.map(fetchJSON));
-  for (const d of data) { state.data[d.version] = d; state.compiled[d.version] = compileWiring(d); }
   for (const id of ['wiring','compare']) { $(id).replaceChildren(...state.index.versions.map(v => new Option(state.index.names[v], v))); $(id).disabled = false; }
   $('compare').value = 'fafb_buhmann';
   $('wiring').value = 'fafb'; $('wiring').disabled = false; $('play').disabled = false; $('reset').disabled = false;
-  fit(dial); fit(chart); size = fit(canvas); chooseWiring();
+  fit(dial); fit(chart); size = fit(canvas); await chooseWiring();
+  if (reduceMotion.matches) { state.running=false; updateNumbers(); }
   const numberRows = [
     ['Princeton on own wiring',study.own,state.reference.own['fafb|noise'].error],
     ['Princeton → Buhmann',study.detector,state.reference.transplant['fafb__fafb_buhmann|noise']],
@@ -297,5 +369,5 @@ try {
     $('tour-source-values').append(row);
   }
   $('study-results-link').href = study.source; $('tour-next').disabled = false;
-  $('load-state').textContent = '● 7 wirings · local data'; requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
 } catch (error) { fail(error); }
