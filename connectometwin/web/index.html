@@ -11,13 +11,24 @@
 <body>
   <header>
     <a class="brand" href="index.html"><span class="brand-mark">◎</span> ConnectomeTwin</a>
-    <span class="eyebrow">CIRCUIT EXPLORER <span class="tag">PHASE 04</span></span>
+    <span class="eyebrow">CIRCUIT EXPLORER <span class="tag">PHASE 05</span></span>
     <a href="self-check.html" class="check-link">Engine self-check ↗</a>
   </header>
   <main>
     <div class="intro"><div><p class="eyebrow">FLY COMPASS CONNECTOME</p><h1>One circuit. Different wiring.</h1>
       <p class="subhead">Explore reconstructed connections and watch a trained circuit remember a heading.</p></div>
       <span id="load-state" role="status">Loading circuit data…</span></div>
+    <section class="tour panel" aria-labelledby="tour-title">
+      <div class="tour-content" aria-live="polite" aria-atomic="true">
+        <p class="eyebrow" id="tour-progress">GUIDED TOUR · 5 STEPS</p>
+        <h2 id="tour-title">Why can the same fly look like a different circuit?</h2>
+        <p id="tour-caption">Follow the connections, test a trained network, then try a small repair. Each step sets the controls for you.</p>
+      </div>
+      <div class="tour-actions"><button id="tour-back" class="secondary" disabled>Back</button><button id="tour-next" disabled>Start tour</button><button id="tour-exit" class="secondary" hidden>Explore freely</button></div>
+      <div id="tour-examples" hidden><span>Step 5 examples</span><button id="tour-detector" class="secondary" aria-pressed="true">Detector difference</button><button id="tour-filtering" class="secondary" aria-pressed="false">Filtering-only difference</button></div>
+      <p id="tour-number-note" class="panel-note" hidden>Tour errors are 16-heading means over steps 5–39, not the live single-heading trial. Demo values come from reference.json and refits.json.</p>
+      <details class="tour-sources"><summary>Study results and demo values</summary><p>The study’s noise-trained, seed-0 results use 2,000 random headings; this rounded demo uses 16 fixed headings. Both show the same pattern; their values are labelled separately.</p><table><caption>Error in degrees · noise-trained, seed 0</caption><thead><tr><th scope="col">Experiment</th><th scope="col">Study results</th><th scope="col">This demo</th></tr></thead><tbody id="tour-source-values"></tbody></table><a id="study-results-link" href="https://github.com/donti507/chessfly">Study result table ↗</a></details>
+    </section>
     <section class="controls" aria-label="Circuit controls">
       <label>Wiring A · train<select id="wiring" disabled></select></label>
       <label>Wiring B · test / compare<select id="compare" disabled></select></label>
@@ -55,7 +66,7 @@
         </section>
       </div>
     </div>
-    <footer><span>Own wiring runs on A. Transplant runs A’s mapped parameters on B’s connections. All errors are wrapped angular errors in degrees.</span><span>Vanilla JS + Canvas · all data local</span></footer>
+    <footer><div><p>Own wiring runs on A. Transplant runs A’s mapped parameters on B’s connections. All errors are wrapped angular errors in degrees.</p><nav aria-label="Research links"><a href="https://arxiv.org/abs/2610.29205">Read the paper ↗</a><a href="https://github.com/donti507/chessfly">ChessFly code &amp; results ↗</a></nav><p>Data credits: FlyWire, Janelia FlyEM (male CNS and hemibrain), and BANC connectomes. Imaging context: DANDI 000289 (Basnak et al., 2025); imaging data are not replayed in this demo. Original data retain their providers’ licenses.</p></div><span>Vanilla JS + Canvas · all data local</span></footer>
     <p id="error-message" role="alert" hidden></p>
     <noscript>This explorer requires JavaScript. Serve this directory with a static HTTP server.</noscript>
   </main>

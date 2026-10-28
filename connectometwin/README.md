@@ -4,7 +4,7 @@ Interactive companion to *Reconstruction differences rival individual difference
 
 Compare two reconstructions of the same fly circuit, see which connections changed, and watch a trained network hold, or lose, a heading on each wiring.
 
-Status: Phases 0–4 complete. See `docs/ROADMAP.md`.
+Status: Phases 0–5 complete. See `docs/ROADMAP.md`.
 
 ## Simulation engine (Phase 2)
 
@@ -73,6 +73,7 @@ For local checks:
 node connectometwin/tests/engine.test.mjs
 node connectometwin/tests/view.test.mjs
 node connectometwin/tests/run.test.mjs
+node connectometwin/tests/tour.test.mjs
 # Optional: requires Playwright, Chromium, and the static server above.
 node connectometwin/tests/browser.cjs
 ```
@@ -80,7 +81,7 @@ node connectometwin/tests/browser.cjs
 The browser check covers all wirings, diff direction, connection limits,
 playback, the numerical run result, Canvas refresh, mobile sizing and the
 browser reference gate. Set `CHROMIUM_PATH` or `CONNECTOMETWIN_URL` to override
-the test browser executable or server address. The guided story remains future work.
+the test browser executable or server address. The guided tour is described below.
 
 ## Experiment controls (Phase 4)
 
@@ -118,3 +119,41 @@ invented. Refit exports are generated results, not additional published claims.
 reference case and refit, all 49 directed A/B choices, disabled-control state,
 and darkness semantics. The browser check also exercises transplant/refit mode,
 clean scaling, unsupported-pair resets and the live numerical error displays.
+
+## Guided story (Phase 5)
+
+Choose **Start tour** above the controls, then use Next/Back through five steps:
+same fly and two detectors; added/removed/changed connections; own-wiring memory;
+the same noise-trained network transplanted to Buhmann wiring; and cell-type
+refitting. Each step restores the complete preset, including cue angle, scale,
+darkness, edge layers and playback. Structural steps pause; model steps replay.
+Step 5 offers detector and filtering-only examples without adding a sixth step.
+Changing experiment controls exits the tour so its captions cannot describe a
+manual configuration as if it were still the preset. Pause/Replay/Restart remain
+available within the tour. Finish or Explore freely retains the current run.
+
+Tour counts and demo errors come directly from the shipped `diffs.json`,
+`reference.json` and `refits.json`. The displayed failure is the noise-trained
+Princeton → Buhmann transplant (8.32° own → 85.47° transplant → 15.92° refitted).
+FlyWire uses 19 refitted target types, despite the study's general description
+of “about thirty” gains. The filtering-only example uses male CNS → neuPrint,
+32 gains, and improves from 20.94° to 5.56° (own wiring: 8.74°).
+
+The expandable **Study results and demo values** table separately quotes the
+study's noise-level-0.5, neuron-gain, seed-0 results: 8.54° own, 84.11° detector
+transplant, 15.59° detector refit; male-CNS filtering 20.23° → 5.67°.
+Source: [`stage4d_transplants.csv`](https://github.com/donti507/chessfly/blob/6441621435deb66780fee950914108bbeda3051e/new_study/results/stage4d_transplants.csv)
+at study repository commit `6441621`. Its `stage4d_final.py` evaluates 2,000
+random headings, whereas this demo uses the 16 fixed reference headings and
+rounded exports. These are seed-specific examples, not cross-seed averages.
+The page does not download the study results at runtime.
+
+The footer links the paper and ChessFly source and credits FlyWire, Janelia
+FlyEM, BANC and DANDI 000289 (Basnak et al., 2025). DANDI supplies the study's
+imaging context; this page simulates the model and does not replay imaging data.
+Original datasets retain their providers' licenses.
+
+`tests/tour.test.mjs` checks all five presets, source-derived captions, numerical
+benchmarks and the filtering example. The browser test walks Next/Back, switches
+step-5 examples, finishes/restarts/exits through manual changes, and checks
+credits, source links and mobile layout.

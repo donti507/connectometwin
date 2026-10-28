@@ -1,6 +1,7 @@
 import {compileWiring, Simulation, simulate, wrapped} from './engine.mjs';
 import {families, colors, layout, strongestEdges, orientedDiff, ratioWidth} from './view.mjs';
 import {configureRun, referenceFor} from './run.mjs';
+import {buildTour, study} from './tour.mjs';
 const $ = id => document.getElementById(id);
 const radians = degrees => degrees * Math.PI / 180;
 const degrees = angle => angle * 180 / Math.PI;
@@ -226,12 +227,45 @@ canvas.addEventListener('pointermove', event => {
   tooltip.style.left = `${Math.max(0, Math.min(rect.width - 235, x + 12))}px`; tooltip.style.top = `${Math.min(rect.height - 100, y + 12)}px`;
 });
 canvas.addEventListener('pointerleave', () => { $('tooltip').hidden = true; });
-$('wiring').addEventListener('change', chooseWiring);
-$('compare').addEventListener('change', chooseWiring);
-for (const id of ['mode','refit','darkness']) $(id).addEventListener('change', restart);
-$('scale').addEventListener('input', restart);
-for (const id of ['all-edges', 'show-diff']) $(id).addEventListener('change', drawConnections);
-$('model').addEventListener('change', restart); $('angle').addEventListener('input', restart);
+const tour = {index:-1, filtering:false};
+function endTour() {
+  tour.index = -1; tour.filtering = false;
+  $('tour-progress').textContent = 'GUIDED TOUR · 5 STEPS';
+  $('tour-title').textContent = 'Explore freely—or replay the story.';
+  $('tour-caption').textContent = 'Your controls are yours to change. Restart the tour to return to the same-fly comparison.';
+  $('tour-back').disabled = true; $('tour-next').textContent = 'Start tour';
+  $('tour-exit').hidden = true; $('tour-examples').hidden = true;
+  $('tour-number-note').hidden = true;
+}
+function applyTour(index) {
+  const steps = buildTour(state.reference,state.refits,state.diffs,tour.filtering);
+  tour.index = Math.max(0,Math.min(steps.length-1,index));
+  const step = steps[tour.index], settings = step.settings;
+  for (const [id,value] of Object.entries({wiring:settings.a,compare:settings.b,mode:settings.mode,model:settings.network,angle:settings.angle,scale:settings.scalePercent})) $(id).value = value;
+  for (const [id,value] of Object.entries({refit:settings.refit,darkness:settings.darkness,'show-diff':settings.diff,'all-edges':settings.allEdges})) $(id).checked = value;
+  chooseWiring(); state.running = settings.playing; updateNumbers();
+  $('tour-progress').textContent = `GUIDED TOUR · STEP ${tour.index+1} OF ${steps.length}`;
+  $('tour-title').textContent = step.title; $('tour-caption').textContent = step.caption;
+  $('tour-back').disabled = tour.index === 0;
+  $('tour-next').textContent = tour.index === steps.length-1 ? 'Finish tour' : 'Next';
+  $('tour-exit').hidden = false; $('tour-examples').hidden = tour.index !== 4;
+  $('tour-number-note').hidden = false;
+  $('tour-detector').setAttribute('aria-pressed',String(!tour.filtering));
+  $('tour-filtering').setAttribute('aria-pressed',String(tour.filtering));
+}
+function manualChange(action) {
+  return () => { if (tour.index >= 0) endTour(); action(); };
+}
+$('tour-next').addEventListener('click',()=>tour.index===4 ? endTour() : applyTour(tour.index+1));
+$('tour-back').addEventListener('click',()=>applyTour(tour.index-1));
+$('tour-exit').addEventListener('click',endTour);
+for (const [id,filtering] of [['tour-detector',false],['tour-filtering',true]]) $(id).addEventListener('click',()=>{tour.filtering=filtering;applyTour(4);});
+$('wiring').addEventListener('change', manualChange(chooseWiring));
+$('compare').addEventListener('change', manualChange(chooseWiring));
+for (const id of ['mode','refit','darkness']) $(id).addEventListener('change', manualChange(restart));
+$('scale').addEventListener('input', manualChange(restart));
+for (const id of ['all-edges', 'show-diff']) $(id).addEventListener('change', manualChange(drawConnections));
+$('model').addEventListener('change', manualChange(restart)); $('angle').addEventListener('input', manualChange(restart));
 $('reset').addEventListener('click', restart);
 $('play').addEventListener('click', () => {
   if (state.simulation.t >= 40) restart(); else { state.running = !state.running; state.lastStep = 0; updateNumbers(); }
@@ -250,5 +284,18 @@ try {
   $('compare').value = 'fafb_buhmann';
   $('wiring').value = 'fafb'; $('wiring').disabled = false; $('play').disabled = false; $('reset').disabled = false;
   fit(dial); fit(chart); size = fit(canvas); chooseWiring();
+  const numberRows = [
+    ['Princeton on own wiring',study.own,state.reference.own['fafb|noise'].error],
+    ['Princeton → Buhmann',study.detector,state.reference.transplant['fafb__fafb_buhmann|noise']],
+    ['Detector difference, refitted',study.detectorRefit,state.refits.fafb__fafb_buhmann.error_after_refit],
+    ['Male CNS filtering difference',study.filtering,state.refits.mcns__mcns_neuprint.error_zero_shot],
+    ['Filtering difference, refitted',study.filteringRefit,state.refits.mcns__mcns_neuprint.error_after_refit],
+  ];
+  for (const [label,paper,demo] of numberRows) {
+    const row = document.createElement('tr');
+    for (const value of [label,`${paper.toFixed(2)}°`,`${demo.toFixed(2)}°`]) { const cell = document.createElement('td'); cell.textContent=value; row.append(cell); }
+    $('tour-source-values').append(row);
+  }
+  $('study-results-link').href = study.source; $('tour-next').disabled = false;
   $('load-state').textContent = '● 7 wirings · local data'; requestAnimationFrame(animate);
 } catch (error) { fail(error); }

@@ -9,7 +9,8 @@ One static web page (`web/index.html`, vanilla JS + Canvas, no build step) hoste
 - Phase 2 (JS engine): DONE. Typed-array CSR engine in `web/js/engine.mjs`; all 46 Python reference cases pass within ±0.05 deg. Run `node connectometwin/tests/engine.test.mjs` from the repository root.
 - Phase 3 (visualization): DONE. Static Canvas explorer in `web/index.html`, with family rings, connection/diff layers, live EPG activity, heading dial and error trace. Browser reference gate in `web/self-check.html`.
 - Phase 4 (interactions): DONE. Independent A/B selectors, own/transplant modes, clean/noise networks, ±2% clean weight scaling, supported noise-trained refits, cue/darkness and playback controls. Current-run errors are separated from the matching 16-heading reference benchmark.
-- Phases 5-6: TODO. Guided story and deployment remain future work.
+- Phase 5 (guided story): DONE. Five-step Next/Back tour applies controls automatically; step 5 includes detector and filtering-only examples. Study results and local demo values are labelled separately. Research links and original data credits are in the footer.
+- Phase 6: TODO. Theme/deployment remain future work.
 
 ## Data contract (`web/data/`)
 - `index.json`: versions, display names, model equations, base fly for same-fly variants.
