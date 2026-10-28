@@ -72,3 +72,13 @@ In headless Chromium at 1366 px with **4× CPU throttling**, the largest wiring 
 Connectome data: **FlyWire, Janelia FlyEM (male CNS and hemibrain), and BANC**. Imaging context: **DANDI 000289**, Basnak et al. (2025). This page simulates the model; it does not replay imaging recordings. Please cite the original datasets and respect their licenses.
 
 See the [development README](connectometwin/README.md) for the model, experiments and numerical source notes, and the [roadmap](connectometwin/docs/ROADMAP.md) for implementation status.
+
+## 3D anatomy work in progress
+
+The optional **3D explorer** now has local WebGL camera controls, neuron selection,
+family filters and simulated activity. Its current **topology preview is not
+anatomical neuron shape**. A real FlyWire-783 skeleton source has been identified,
+but the cloud network policy blocks its download; no anatomy is bundled yet.
+See the [anatomical data/import status](connectometwin/docs/3D-ANATOMY.md) for the
+precise access requirement, provenance checks, prototype/full import commands
+and remaining milestones. The validated 2D view remains available.

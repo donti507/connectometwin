@@ -17,6 +17,7 @@ const layer = document.createElement('canvas');
 const canvas = $('network'), dial = $('dial'), chart = $('error-chart');
 const ctx = canvas.getContext('2d'), dialCtx = dial.getContext('2d'), chartCtx = chart.getContext('2d');
 let size = {width: 0, height: 0, dpr: 1};
+let threeView=null,threePromise=null,viewMode='ring';
 let colors = [...defaultColors], palette = {}, request = 0, worker = null;
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const loadWiring = createWiringLoader(fetchJSON,compileWiring);
@@ -29,6 +30,7 @@ function updatePalette() {
   for (const token of ['surface','muted-text','canvas-grid','canvas-ring','cue','accent','text','positive','negative','added','removed','changed','cue-shade']) palette[token] = style.getPropertyValue(`--${token}`).trim();
   colors = families.map((_,i) => style.getPropertyValue(`--family-${i}`).trim());
   document.querySelectorAll('.family-dot').forEach((dot,i)=>{dot.style.background=colors[i];});
+  threeView?.setTheme(palette,colors);
   drawConnections(); drawDial(); drawChart(); state.dirty = true;
 }
 window.addEventListener('themechange',updatePalette);
@@ -50,7 +52,7 @@ function line(context, a, b, color, width = 1) {
   context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.stroke();
 }
 function drawConnections() {
-  if (!state.current || !size.width || state.loading) return;
+  if (!state.current || !size.width || !size.height || state.loading) return;
   const data = state.data[state.current], points = state.points;
   layer.width = canvas.width; layer.height = canvas.height;
   const context = layer.getContext('2d'); context.scale(size.dpr, size.dpr);
@@ -76,8 +78,8 @@ function drawConnections() {
   const diff = orientedDiff(state.diffs, from, to);
   if (!diff) $('show-diff').checked = false;
   $('show-diff').disabled = !diff;
-  $('diff-legend').hidden = !($('show-diff').checked && diff);
-  $('diff-note').hidden = !$('show-diff').checked;
+  $('diff-legend').hidden = viewMode==='three' || !($('show-diff').checked && diff);
+  $('diff-note').hidden = viewMode==='three' || !$('show-diff').checked;
   if ($('show-diff').checked && diff) {
     const other = state.data[state.current === from ? to : from];
     const strength = new Map();
@@ -95,9 +97,11 @@ function drawConnections() {
     context.globalAlpha = 1;
     $('diff-note').textContent = `${state.data[from].name} → ${state.data[to].name}: ${diff.added.length.toLocaleString()} added, ${diff.removed.length.toLocaleString()} removed, ${diff.changed.length.toLocaleString()} changed (>1.5× in either direction). Showing ${shown.length.toLocaleString()} / ${overlay.length.toLocaleString()} diff edges. Width shows the magnitude of the log weight ratio for changed edges.`;
   }
+  if(threeView && viewMode==='three') threeView.setOptions(threeOptions());
   state.dirty = true;
 }
 function drawNetwork() {
+  if(viewMode==='three' || !size.width || !size.height) return;
   ctx.clearRect(0, 0, size.width, size.height);
   ctx.drawImage(layer, 0, 0, size.width, size.height);
   if (!state.current) return;
@@ -124,8 +128,9 @@ function drawNetwork() {
 }
 function drawDial() {
   const {width, height} = dial.getBoundingClientRect();
+  if(!width || !height)return;
   dialCtx.clearRect(0, 0, width, height);
-  const center = {x: width / 2, y: height / 2}, radius = Math.min(width / 2 - 45, height / 2 - 25);
+  const center = {x: width / 2, y: height / 2}, radius = Math.max(1,Math.min(width / 2 - 45, height / 2 - 25));
   dialCtx.strokeStyle = palette['canvas-ring']; dialCtx.lineWidth = 1;
   dialCtx.beginPath(); dialCtx.arc(center.x, center.y, radius, 0, Math.PI * 2); dialCtx.stroke();
   for (let i = 0; i < 36; i++) {
@@ -146,6 +151,7 @@ function drawDial() {
 }
 function drawChart() {
   const {width, height} = chart.getBoundingClientRect();
+  if(!width || !height)return;
   const left = 43, right = width - 24, top = 15, bottom = height - 32;
   const x = t => left + t / 39 * (right - left), y = error => bottom - error / 180 * (bottom - top);
   chartCtx.clearRect(0, 0, width, height);
@@ -238,6 +244,7 @@ async function restart() {
   $('load-state').textContent = `● 7 wirings available · ${Object.keys(state.data).length} loaded`;
   document.body.dataset.ready = 'ready';
   drawConnections(); updateNumbers(); drawChart();
+  if(threeView && viewMode==='three') syncThree().catch(threeFailure);
   return true;
 }
 function chooseWiring() { return restart(); }
@@ -260,6 +267,7 @@ function animate(now) {
     if (Math.abs(difference) > 0.0001) smoothing = true;
   }
   if (state.dirty || smoothing) { drawNetwork(); drawDial(); state.dirty = false; }
+  if(threeView && viewMode==='three' && !document.hidden){threeView.updateActivity(state.activity);threeView.render();}
   requestAnimationFrame(animate);
 }
 canvas.addEventListener('pointermove', event => {
@@ -277,7 +285,7 @@ let selectedNeuron = -1;
 function describeNeuron(index) {
   const neuron = state.data[state.current]?.neurons[index];
   if (!neuron) return;
-  selectedNeuron = index; state.dirty=true;
+  selectedNeuron = index; state.dirty=true; threeView?.select(index);
   $('neuron-details').textContent = `Neuron ${index+1} of ${state.points.length}: ${neuron.type}, ${neuron.family}, ID ${neuron.id}. ${state.points[index].fallback ? 'Angle unavailable; fallback position.' : `Angle ${degrees(neuron.angle).toFixed(1)} degrees.`} Activity ${Math.max(0,state.frame?.activity[index] || 0).toFixed(3)}.`;
 }
 canvas.addEventListener('keydown',event=>{
@@ -298,6 +306,45 @@ document.addEventListener('keydown',event=>{
   if(event.key.toLowerCase()==='r' && !$('reset').disabled){event.preventDefault();$('reset').click();}
 });
 
+function threeOptions(){return {a:$('wiring').value,b:$('compare').value,diffs:state.diffs,diff:$('show-diff').checked,all:$('all-edges').checked};}
+function threeFailure(error){
+  $('three-status').hidden=false;$('three-status').textContent=`3D view: ${error.message} The 2D ring remains available.`;
+  document.body.dataset.three='failed';
+}
+async function syncThree(){
+  if(!threeView || !state.current || state.loading)return;
+  const data=state.data[state.current],wasAnatomical=threeView.mode==='anatomy';
+  if(threeView.data!==data){if(!await threeView.setWiring(data,threeOptions()))return;if(wasAnatomical && threeView.available)await threeView.setMode('anatomy');}
+  else threeView.setOptions(threeOptions());
+  $('three-mode').value=threeView.mode;
+  const anatomical=$('three-mode').querySelector('[value=anatomy]');anatomical.disabled=!threeView.available;
+  anatomical.textContent=threeView.available?`Anatomical skeletons · ${threeView.available}/${data.neurons.length} available`:'Anatomical skeletons · not imported';
+  $('three-edges').checked=threeView.showEdges;
+  $('three-status').textContent=threeView.mode==='anatomy'?`Real FlyWire-783 anatomy: ${threeView.skeletons.length}/${data.neurons.length} matching neurons. Source coordinates are rescaled together for display. Missing neurons are omitted.`:`Topology preview: ${data.neurons.length} model neurons in a 3D graph layout. This is not anatomical neuron shape. ${threeView.available ? `${threeView.available} matching anatomical skeletons can be loaded with the Geometry selector.`:'The public morphology source is identified, but no anatomical skeletons are bundled yet.'}`;
+  document.body.dataset.three='ready';threeView.resize();
+}
+async function chooseThree(){
+  $('three-status').hidden=false;document.body.dataset.three='loading';
+  try{
+    if(!threePromise)threePromise=import('./three-view.mjs');
+    const {ThreeView}=await threePromise;
+    $('three-wrap').hidden=false;$('three-controls').hidden=false;$('three-help').hidden=false;
+    if(!threeView){threeView=new ThreeView($('three-wrap'),describeNeuron);threeView.setTheme(palette,colors);}
+    viewMode='three';$('network').style.visibility='hidden';$('network').tabIndex=-1;$('network').setAttribute('aria-hidden','true');
+    $('network-help').hidden=true;$('tooltip').hidden=true;
+    $('connection-note').hidden=true;$('diff-note').hidden=true;
+    $('view-three').setAttribute('aria-pressed','true');$('view-ring').setAttribute('aria-pressed','false');
+    await syncThree();
+  }catch(error){showRing();threeFailure(error);}
+}
+function showRing(){viewMode='ring';$('connection-note').hidden=false;drawConnections();$('three-status').hidden=true;$('three-wrap').hidden=true;$('three-controls').hidden=true;$('three-help').hidden=true;$('network-help').hidden=false;$('network').style.visibility='visible';$('network').tabIndex=0;$('network').removeAttribute('aria-hidden');$('view-three').setAttribute('aria-pressed','false');$('view-ring').setAttribute('aria-pressed','true');state.dirty=true;}
+$('view-three').addEventListener('click',chooseThree);$('view-ring').addEventListener('click',showRing);
+$('three-wrap').addEventListener('three-error',event=>threeFailure(new Error(event.detail)));
+$('three-home').addEventListener('click',()=>threeView?.home());
+$('three-family').addEventListener('change',()=>threeView?.setFilter($('three-family').value));
+$('three-rotate').addEventListener('change',()=>{if(threeView)threeView.controls.autoRotate=$('three-rotate').checked;});
+$('three-edges').addEventListener('change',()=>{if(threeView){threeView.showEdges=$('three-edges').checked;threeView.lines.visible=threeView.showEdges;}});
+$('three-mode').addEventListener('change',async()=>{try{document.body.dataset.three='loading';await threeView.setMode($('three-mode').value);await syncThree();}catch(error){$('three-mode').value=threeView.mode;threeFailure(error);}});
 const tour = {index:-1, filtering:false};
 function endTour() {
   tour.index = -1; tour.filtering = false;

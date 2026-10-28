@@ -201,3 +201,13 @@ SCREENSHOT_PATH="$PWD/connectometwin/docs/images/explorer.png" \
 The measured 4× CPU results (58.3/60.4 fps default/all edges) are a synthetic
 performance check, not measurements on a physical mid-range laptop. Test with
 normal and all-edge views on your target device when assessing hardware limits.
+
+## 3D extension in progress
+
+Choose **3D explorer** for an optional local WebGL view. Until matching anatomical
+files are imported, it displays an explicitly labelled graph topology preview.
+The [3D anatomy handoff](docs/3D-ANATOMY.md) documents the real FlyWire source,
+blocked network hosts, license verification, prototype/full import commands and
+remaining validation. No real skeletons are bundled yet, and the renderer test's
+synthetic fixtures are never shipped as anatomy. Three.js r170 is vendored under
+its MIT license and loaded on demand; the simulation engine remains unchanged.

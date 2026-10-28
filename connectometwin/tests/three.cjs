@@ -1,0 +1,75 @@
+// Optional WebGL integration test. Synthetic anatomy exists only in intercepted
+// responses in a test browser; no artificial morphology is bundled in the app.
+const assert=require('node:assert/strict');
+const {chromium}=require('playwright');
+const base=process.env.CONNECTOMETWIN_URL || 'http://127.0.0.1:8000';
+const ready=page=>page.waitForFunction(()=>document.body.dataset.ready==='ready'&&document.body.dataset.benchmark==='ready');
+(async()=>{
+ const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+ try{
+  const page=await browser.newPage({viewport:{width:1440,height:1200}}),errors=[],requests=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  page.on('console',message=>{if(message.type()==='error')errors.push(message.text());});
+  page.on('request',r=>requests.push(r.url()));
+  await page.goto(base);await ready(page);
+  assert.ok(!requests.some(url=>url.includes('/vendor/')),'3D code should not load for 2D visitors');
+  await page.locator('#view-three').click();
+  await page.waitForFunction(()=>document.body.dataset.three==='ready');
+  assert.match(await page.locator('#three-status').textContent(),/not anatomical/);
+  assert.equal(await page.locator('#three-mode option[value=anatomy]').evaluate(option=>option.disabled),true);
+  assert.equal(await page.locator('#three-wrap').getAttribute('data-neurons'),'433');
+  const canvas=page.locator('#three-wrap canvas');
+  await canvas.focus();await page.keyboard.press(']');
+  assert.match(await page.locator('#neuron-details').textContent(),/Neuron 1 of 433/);
+  await page.keyboard.press('ArrowRight');await page.keyboard.press('+');await page.keyboard.press('Home');
+  await page.locator('#three-family').selectOption('EPG');
+  await page.locator('#three-rotate').check();await page.waitForTimeout(200);await page.locator('#three-rotate').uncheck();
+  await page.locator('#three-family').selectOption('all');
+  await page.locator('#mode').selectOption('transplant');await ready(page);
+  await page.waitForFunction(()=>document.body.dataset.three==='ready');
+  assert.equal(await page.locator('#benchmark-error').textContent(),'85.47°');
+  await page.locator('#refit').check();await ready(page);
+  assert.equal(await page.locator('#benchmark-error').textContent(),'15.92°');
+  await page.locator('#three-home').click();
+  await page.locator('#theme').selectOption('dark');await page.waitForTimeout(100);
+  await page.screenshot({path:'/tmp/connectometwin-three-topology.png',fullPage:true});
+  await page.locator('#view-ring').click();
+  assert.equal(await page.locator('#network').isVisible(),true);
+  assert.equal(await page.locator('#three-wrap').isVisible(),false);
+  assert.equal(await page.locator('#view-ring').getAttribute('aria-pressed'),'true');
+  // Route-only test geometry checks the anatomy path without claiming that the
+  // blocked public skeletons have actually been downloaded.
+  const id='720575940604801993';
+  await page.route('**/data/anatomy/manifest.json',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({schema:1,status:'partial',neurons:[{id,file:id+'.json'}]})}));
+  await page.route('**/data/anatomy/'+id+'.json',async route=>{await new Promise(resolve=>setTimeout(resolve,200));return route.fulfill({contentType:'application/json',body:JSON.stringify({id,vertices:[[0,0,0],[1,0,0],[2,1,0],[2,-1,0]],edges:[[0,1],[1,2],[1,3]]})});});
+  await page.reload();await ready(page);await page.locator('#view-three').click();
+  await page.waitForFunction(()=>document.body.dataset.three==='ready');
+  await page.locator('#three-mode').selectOption('anatomy');
+  await page.locator('#three-mode').selectOption('topology');
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('#three-wrap').getAttribute('data-mode'),'topology','late anatomy load must not replace a newer geometry choice');
+  await page.locator('#three-mode').selectOption('anatomy');
+  await page.waitForFunction(()=>document.getElementById('three-wrap').dataset.mode==='anatomy');
+  assert.equal(await page.locator('#three-wrap').getAttribute('data-neurons'),'1');
+  assert.equal(await page.locator('#three-wrap').getAttribute('data-segments'),'3');
+  assert.match(await page.locator('#three-status').textContent(),/1\/433 matching neurons/);
+  await page.locator('#wiring').selectOption('hemibrain');await ready(page);
+  await page.waitForFunction(()=>document.body.dataset.three==='ready');
+  assert.equal(await page.locator('#three-wrap').getAttribute('data-mode'),'topology');
+  assert.equal(await page.locator('#three-mode option[value=anatomy]').evaluate(option=>option.disabled),true);
+  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(120);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  // A browser without WebGL must retain a usable 2D simulator.
+  const fallback=await browser.newPage();
+  await fallback.addInitScript(()=>{const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return /webgl/.test(type)?null:original.call(this,type,...args);};});
+  await fallback.goto(base);await ready(fallback);await fallback.locator('#view-three').click();
+  await fallback.waitForFunction(()=>document.body.dataset.three==='failed');
+  assert.equal(await fallback.locator('#view-ring').getAttribute('aria-pressed'),'true');
+  assert.equal(await fallback.locator('#network').isVisible(),true);
+  assert.match(await fallback.locator('#three-status').textContent(),/2D ring remains available/);
+  await fallback.close();
+  assert.deepEqual(errors,[]);
+  assert.ok(requests.every(url=>new URL(url).origin===new URL(base).origin));
+  console.log('PASS: lazy local WebGL renderer, real-connectivity topology preview, camera and keyboard selection, filters, transplant/refit numerical results, 2D fallback, synthetic-only anatomy loading and cross-fly exclusion, mobile layout; no external runtime requests.');
+ }finally{await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

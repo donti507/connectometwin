@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>ConnectomeTwin · Circuit explorer</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
   <script type="module" src="js/theme.mjs"></script>
   <script type="module" src="js/app.mjs"></script>
 </head>
@@ -47,8 +47,12 @@
     <div class="dashboard">
       <section class="panel network-panel" aria-labelledby="network-title">
         <div class="panel-heading"><div><p class="eyebrow">01 / STRUCTURE & ACTIVITY</p><h2 id="network-title">Connection map</h2></div><span id="neuron-count" class="metric">— neurons</span></div>
+        <div class="view-switch" role="group" aria-label="Circuit view"><button id="view-ring" class="secondary" aria-pressed="true">2D ring</button><button id="view-three" class="secondary" aria-pressed="false">3D explorer</button></div>
+        <div id="three-controls" hidden><label for="three-mode">Geometry<select id="three-mode"><option value="topology">Topology preview · not anatomical</option><option value="anatomy" disabled>Anatomical skeletons · not imported</option></select></label><label for="three-family">Neuron family<select id="three-family"><option value="all">All families</option><option>EPG</option><option>PEN_a</option><option>PEN_b</option><option>PEG</option><option>Delta7</option><option>ER</option></select></label><button id="three-home" class="secondary">Reset camera</button><label><input type="checkbox" id="three-rotate"> Rotate slowly</label><label><input type="checkbox" id="three-edges" checked> Show connection arcs</label></div>
+        <p id="three-status" class="panel-note" role="status" hidden></p>
         <div class="view-options"><label><input type="checkbox" id="all-edges"> All connections</label><label><input type="checkbox" id="show-diff"> Diff overlay</label></div>
-        <div class="network-wrap"><canvas id="network" tabindex="0" role="img" aria-describedby="network-help neuron-details" aria-label="Neurons arranged by family and angle, with connections and live EPG activity"></canvas><div id="tooltip" role="tooltip" hidden></div></div>
+        <div class="network-wrap"><canvas id="network" tabindex="0" role="img" aria-describedby="network-help neuron-details" aria-label="Neurons arranged by family and angle, with connections and live EPG activity"></canvas><div id="three-wrap" hidden></div><div id="tooltip" role="tooltip" hidden></div></div>
+        <p id="three-help" class="panel-note" hidden>Drag to orbit; scroll or pinch to zoom. Arrow keys pan; + / − zoom; Home resets the camera. [ / ] select neurons. Connection arcs join graph nodes or skeleton centers; they are not localized synapses. The default shows 1,200 strongest normal edges; 3D diffs show up to 400 entries per category (or all when enabled). Diff ratios are shown as line width in the 2D view. Brightness is simulated activity, not imaging data.</p>
         <p id="network-help" class="panel-note">Focus the map and use ← / → to inspect neurons; Home / End jump to the first / last. Hover or tap a neuron for details.</p>
         <p id="neuron-details" class="panel-note" role="status">No neuron selected.</p>
         <div id="family-legend" class="family-legend"></div>

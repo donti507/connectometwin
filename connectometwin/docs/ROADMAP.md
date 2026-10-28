@@ -52,3 +52,11 @@ Quote numbers from the paper; link arXiv and github.com/donti507/chessfly.
 
 ## Phase 6: deploy
 Light/dark mode, mobile layout, GitHub Pages from `/web` (Settings -> Pages). Link from chessfly README and LinkedIn.
+
+## 3D anatomical extension (in progress)
+
+- Public FlyWire-783 skeleton source identified; matching-ID download is blocked by the current cloud network allowlist.
+- Local Three.js renderer, camera controls, family filtering, picking, simulation linkage and anatomy import/validation pipeline implemented.
+- A labelled non-anatomical 3D topology preview is available; no real skeleton data are bundled or claimed as validated yet.
+- Remaining: apply the saved source-domain access, verify source license, import and inspect a real prototype, expand to the full FlyWire circuit and validate anatomical performance before publication.
+- See `3D-ANATOMY.md` for exact source URLs, importer usage, test evidence and limitations.

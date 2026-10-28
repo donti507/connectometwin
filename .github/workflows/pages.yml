@@ -29,6 +29,8 @@ jobs:
           for test in connectometwin/tests/*.test.mjs; do
             node "$test"
           done
+      - name: Validate anatomical import pipeline
+        run: python3 -m unittest discover -s connectometwin/tests -p test_anatomy.py
       - name: Upload static web folder
         uses: actions/upload-pages-artifact@v3
         with:

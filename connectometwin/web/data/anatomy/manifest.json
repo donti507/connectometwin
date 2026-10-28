@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "status": "awaiting-source-access",
+  "dataset": "FlyWire materialization 783",
+  "coordinate_units": "micrometers",
+  "source": "https://flyem.mrc-lmb.cam.ac.uk/flyconnectome/flywire_skeletons_783",
+  "source_record": "https://zenodo.org/records/10877326",
+  "neurons": [],
+  "note": "No anatomical geometry is bundled yet. The documented public source is blocked by the cloud environment's network policy. The 3D topology preview is a layout of the real connectivity graph, not reconstructed neuron shapes."
+}
