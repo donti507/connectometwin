@@ -6,7 +6,7 @@
   --badge:#e0eddf; --on-accent:#ffffff; --danger:#a12328;
   --positive:#3b7566; --negative:#8c3c72; --added:#16803d; --removed:#bd2727; --changed:#906100;
   --canvas-grid:#a9b9ab; --canvas-ring:#a1b5a5; --cue-shade:#93400712;
-  --family-0:#096c50; --family-1:#245ba7; --family-2:#7448a8; --family-3:#8a5b0f; --family-4:#ad3e60; --family-5:#536959;
+  --family-0:#096c50; --family-1:#245ba7; --family-2:#7448a8; --family-3:#8a5b0f; --family-4:#ad3e60; --family-5:#405f9b;
 }
 :root[data-theme=dark] {
   color-scheme:dark;
@@ -15,7 +15,7 @@
   --badge:#243b31; --on-accent:#112a20; --danger:#ffb1a9;
   --positive:#90b9ab; --negative:#cf94b5; --added:#60e795; --removed:#fa7272; --changed:#e6bb67;
   --canvas-grid:#415c4b; --canvas-ring:#4b6654; --cue-shade:#ffb37812;
-  --family-0:#68e0bd; --family-1:#7faff0; --family-2:#b39aef; --family-3:#e7be79; --family-4:#e895a5; --family-5:#b0c2b4;
+  --family-0:#68e0bd; --family-1:#7faff0; --family-2:#b39aef; --family-3:#e7be79; --family-4:#e895a5; --family-5:#6f94df;
 }
 @media(prefers-color-scheme:dark) {
   :root:not([data-theme]) { color-scheme:dark; --text:#e9eee9; --page:#101817; --surface:#16201c; --raised:#192c22; --muted-text:#afc1b7; --accent:#68e0bd; --cue:#ffb378; --rule:#435e4e; --badge:#243b31; --on-accent:#112a20; }

@@ -57,6 +57,41 @@ class AnatomyTests(unittest.TestCase):
             self.assertEqual(geometry['vertices'], [[0, 0, 0], [1, 1, 0]])
         self.assertEqual((module.ROOT/'web'/'data'/'anatomy'/'manifest.json').read_bytes(), canonical)
 
+    def test_swc_mapping_preserves_nonconsecutive_ids_and_nanometer_units(self):
+        rows = [{'node_id':42,'parent_id':11,'x':2000,'y':3000,'z':4000},
+                {'node_id':11,'parent_id':-1,'x':1000,'y':2000,'z':3000}]
+        vertices, edges = module.decode_swc_rows(rows)
+        self.assertEqual(vertices, [[2,3,4],[1,2,3]])
+        self.assertEqual(edges, [(1,0)])
+        with self.assertRaises(ValueError):
+            module.decode_swc_rows(rows + [rows[0]])
+        with self.assertRaises(ValueError):
+            module.decode_swc_rows([rows[0]])
+
+    def test_bundle_preserves_float_coordinates_edges_and_string_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'sample.ctsk'
+            entries, checksum = module.write_bundle(path, [{'id':'720575940604801993', 'vertices':[[1,2,3],[4,5,6]], 'edges':[[0,1]], 'source_sha256':'fixture'}])
+            raw = path.read_bytes()
+            self.assertEqual(raw[:8], b'CTSK0001')
+            self.assertEqual(struct.unpack_from('<II', raw, 8), (2,1))
+            self.assertEqual(struct.unpack_from('<fff', raw,16), (1,2,3))
+            self.assertEqual(struct.unpack_from('<II', raw,40), (0,1))
+            self.assertEqual(entries[0]['id'],'720575940604801993')
+            self.assertEqual(entries[0]['bytes'],40)
+            self.assertEqual(len(checksum),64)
+
+    def test_overview_omits_only_short_terminal_paths_and_keeps_connected_core(self):
+        vertices = [[-10,0,0],[0,0,0],[0.5,0,0],[0,10,0]]
+        edges = [(0,1),(1,2),(1,3)]
+        points, links = module.overview_skeleton(vertices,edges,minimum_terminal_length=5,tolerance=.75)
+        self.assertNotIn(vertices[2],points)
+        self.assertIn(vertices[0],points)
+        self.assertIn(vertices[3],points)
+        self.assertEqual(len(links),len(points)-1)
+        self.assertTrue(all(point in vertices for point in points))
+        self.assertEqual(module.overview_skeleton([[0,0,0],[.1,0,0]],[(0,1)])[1],[[0,1]])
+
     def test_bad_counts_coordinates_and_edges(self):
         for raw in [b'bad', struct.pack('<II', 10, 20), binary([(math.nan, 0, 0)], []), binary([(0, 0, 0)], [(0, 1)])]:
             with self.assertRaises(ValueError):

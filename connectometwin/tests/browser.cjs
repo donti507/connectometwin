@@ -9,7 +9,7 @@ const {chromium} = require('playwright');
     page.on('pageerror', e => errors.push(e.message));
     page.on('request', request => requests.push(request.url()));
     const base = process.env.CONNECTOMETWIN_URL || 'http://127.0.0.1:8000';
-    await page.goto(base);
+    await page.goto(base+'?view=ring');
     await page.waitForFunction(() => document.getElementById('load-state').textContent.includes('7 wirings'));
     assert.equal(await page.locator('#wiring option').count(),7);
     assert.equal(await page.locator('#compare option').count(),7);

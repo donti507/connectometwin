@@ -54,8 +54,8 @@ python -m http.server 8000
 Open the server's `index.html`. Return to the repository root before running the test commands below. The page uses vanilla JavaScript, Canvas, system
 fonts and local JSON only; no CDN or external network requests are required.
 Select wiring A/B, own or transplant mode, and clean or noise-trained parameters. Runs animate at
-browser refresh rate, with one model timestep every 100 ms and smooth EPG glow
-between steps. Playback stops after step 39; use Replay or Restart for a new run.
+browser refresh rate, targeting ten model timesteps per second and smooth EPG glow
+between steps. Slow renderers stretch playback rather than skip model steps. Playback stops after step 39; use Replay or Restart for a new run.
 The error plot shows absolute wrapped error in degrees, with a mean over steps
 5–39 only. Display smoothing affects glow only, never model state or error.
 
@@ -202,12 +202,31 @@ The measured 4× CPU results (58.3/60.4 fps default/all edges) are a synthetic
 performance check, not measurements on a physical mid-range laptop. Test with
 normal and all-edge views on your target device when assessing hardware limits.
 
-## 3D extension in progress
+## Real anatomical 3D extension
 
-Choose **3D explorer** for an optional local WebGL view. Until matching anatomical
-files are imported, it displays an explicitly labelled graph topology preview.
-The [3D anatomy handoff](docs/3D-ANATOMY.md) documents the real FlyWire source,
-blocked network hosts, license verification, prototype/full import commands and
-remaining validation. No real skeletons are bundled yet, and the renderer test's
-synthetic fixtures are never shipped as anatomy. Three.js r170 is vendored under
-its MIT license and loaded on demand; the simulation engine remains unchanged.
+![Real FlyWire compass-circuit anatomy](docs/images/anatomy.png)
+
+The default view now loads real skeleton shapes for **433/433 FlyWire neurons**.
+The 24.4 MB Parquet subset supplied by the project owner is converted to a
+10.2 MB full-detail binary bundle plus a 2.6 MB overview, with exact string-ID matching, verified checksums,
+micrometer coordinates and 0.25 µm path simplification. The dataset is attributed
+to Schlegel & Jefferis (2024), CC BY 4.0. No cloud-source access is needed to run
+the bundled viewer.
+
+Read the [anatomy handoff](docs/3D-ANATOMY.md) for provenance, binary format,
+reproducible imports and limitations. Three.js r170 remains locally vendored;
+model equations and reference data are unchanged. The [original 2D screenshot](docs/images/explorer.png)
+is retained for the ring view (`?view=ring`). The default 3D anatomy view includes
+rotation/zoom, keyboard/pointer selection, filters, activity and camera reset.
+
+`tests/anatomy.test.mjs` validates the real bundle's checksum, every neuron,
+parent-tree connectivity and exact coverage of all three FlyWire variants.
+`tests/test_anatomy.py` checks SWC units/ID mapping and the binary writer.
+`tests/three.cjs` now exercises real anatomical rendering, default landing,
+transplant/refit values, a test-only legacy JSON fixture, mobile and no-WebGL
+fallback. Existing 2D regression/performance checks explicitly use `?view=ring`.
+
+The fast overview keeps all 433 neurons but omits terminal twigs shorter than
+5 µm and simplifies remaining paths at 0.75 µm. Full branches retains the
+0.25 µm data. Only changed neuron color ranges are uploaded to GPU buffers;
+lightweight point sprites replace sphere meshes for anchor/activity markers.

@@ -53,10 +53,11 @@ Quote numbers from the paper; link arXiv and github.com/donti507/chessfly.
 ## Phase 6: deploy
 Light/dark mode, mobile layout, GitHub Pages from `/web` (Settings -> Pages). Link from chessfly README and LinkedIn.
 
-## 3D anatomical extension (in progress)
+## 3D anatomical extension
 
-- Public FlyWire-783 skeleton source identified; matching-ID download is blocked by the current cloud network allowlist.
-- Local Three.js renderer, camera controls, family filtering, picking, simulation linkage and anatomy import/validation pipeline implemented.
-- A labelled non-anatomical 3D topology preview is available; no real skeleton data are bundled or claimed as validated yet.
-- Remaining: apply the saved source-domain access, verify source license, import and inspect a real prototype, expand to the full FlyWire circuit and validate anatomical performance before publication.
-- See `3D-ANATOMY.md` for exact source URLs, importer usage, test evidence and limitations.
+- Real FlyWire-783 anatomy for all **433/433 neurons** is bundled from the project owner's filtered Zenodo Parquet upload (CC BY 4.0).
+- Local import supports SWC Parquet and precomputed skeletons; exact IDs, parent references, units, checksums, branch connectivity and full coverage are validated.
+- The full 10.2 MB bundle contains 511,265 simplified branch segments; the default 2.6 MB overview retains all 433 neurons while omitting fine terminal twigs, with Full branches available explicitly. Geometry uses shared source coordinates and one uniform display transform.
+- Real anatomy is the default 3D landing view. Camera controls, picking, filters and live activity work with own/transplant/refit modes; other flies use an explicitly labelled topology fallback.
+- Typed-array GPU buffers and on-demand redraw reduce memory and idle work. The numerical engine remains unchanged.
+- Provenance, license, screenshots, format and remaining anatomical-data limitations are documented in `3D-ANATOMY.md`. Public deployment status must be checked separately from a successful push.

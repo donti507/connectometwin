@@ -17,7 +17,8 @@ const layer = document.createElement('canvas');
 const canvas = $('network'), dial = $('dial'), chart = $('error-chart');
 const ctx = canvas.getContext('2d'), dialCtx = dial.getContext('2d'), chartCtx = chart.getContext('2d');
 let size = {width: 0, height: 0, dpr: 1};
-let threeView=null,threePromise=null,viewMode='ring';
+let threeView=null,threePromise=null,viewMode='ring',previousAnimationTime=0;
+let geometryPreference=new URLSearchParams(location.search).get('geometry')==='topology'?'topology':'anatomy';
 let colors = [...defaultColors], palette = {}, request = 0, worker = null;
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const loadWiring = createWiringLoader(fetchJSON,compileWiring);
@@ -97,7 +98,7 @@ function drawConnections() {
     context.globalAlpha = 1;
     $('diff-note').textContent = `${state.data[from].name} → ${state.data[to].name}: ${diff.added.length.toLocaleString()} added, ${diff.removed.length.toLocaleString()} removed, ${diff.changed.length.toLocaleString()} changed (>1.5× in either direction). Showing ${shown.length.toLocaleString()} / ${overlay.length.toLocaleString()} diff edges. Width shows the magnitude of the log weight ratio for changed edges.`;
   }
-  if(threeView && viewMode==='three') threeView.setOptions(threeOptions());
+  if(threeView && viewMode==='three'){threeView.setOptions(threeOptions());$('three-edges').checked=threeView.showEdges;}
   state.dirty = true;
 }
 function drawNetwork() {
@@ -254,6 +255,7 @@ function resize() {
   drawConnections(); drawDial(); drawChart(); state.dirty = true;
 }
 function animate(now) {
+  const smoothingFactor=reduceMotion.matches?1:1-Math.exp(-Math.min(1000,previousAnimationTime?now-previousAnimationTime:16.7)/45);previousAnimationTime=now;
   if (!document.hidden && state.running && state.simulation && (!state.lastStep || now - state.lastStep >= 100)) {
     state.frame = state.simulation.step(); state.lastStep = now;
     state.trace.push(Math.abs(degrees(wrapped(state.frame.heading - state.simulation.theta))));
@@ -263,7 +265,7 @@ function animate(now) {
   let smoothing = false;
   if (state.frame) for (let i = 0; i < state.activity.length; i++) {
     const difference = Math.max(0, state.frame.activity[i]) - state.activity[i];
-    state.activity[i] += difference * (reduceMotion.matches ? 1 : 0.3);
+    state.activity[i] += difference * smoothingFactor;
     if (Math.abs(difference) > 0.0001) smoothing = true;
   }
   if (state.dirty || smoothing) { drawNetwork(); drawDial(); state.dirty = false; }
@@ -286,7 +288,7 @@ function describeNeuron(index) {
   const neuron = state.data[state.current]?.neurons[index];
   if (!neuron) return;
   selectedNeuron = index; state.dirty=true; threeView?.select(index);
-  $('neuron-details').textContent = `Neuron ${index+1} of ${state.points.length}: ${neuron.type}, ${neuron.family}, ID ${neuron.id}. ${state.points[index].fallback ? 'Angle unavailable; fallback position.' : `Angle ${degrees(neuron.angle).toFixed(1)} degrees.`} Activity ${Math.max(0,state.frame?.activity[index] || 0).toFixed(3)}.`;
+  $('neuron-details').textContent = `Neuron ${index+1} of ${state.points.length}: ${neuron.type}, ${neuron.family}, ID ${neuron.id}. ${state.points[index].fallback ? 'Angle unavailable; fallback position.' : `Ring-layout angle ${degrees(neuron.angle).toFixed(1)} degrees.`} Activity ${Math.max(0,state.frame?.activity[index] || 0).toFixed(3)}.`;
 }
 canvas.addEventListener('keydown',event=>{
   if (!state.points.length || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
@@ -313,19 +315,23 @@ function threeFailure(error){
 }
 async function syncThree(){
   if(!threeView || !state.current || state.loading)return;
-  const data=state.data[state.current],wasAnatomical=threeView.mode==='anatomy';
-  if(threeView.data!==data){if(!await threeView.setWiring(data,threeOptions()))return;if(wasAnatomical && threeView.available)await threeView.setMode('anatomy');}
+  document.body.dataset.three='loading';
+  const data=state.data[state.current];
+  if(threeView.data!==data){if(!await threeView.setWiring(data,threeOptions()))return;}
   else threeView.setOptions(threeOptions());
+  if(geometryPreference==='anatomy' && threeView.available && threeView.mode!=='anatomy'){$('three-status').textContent=`Loading ${threeView.available} real neuron skeletons…` ;await threeView.setMode('anatomy');}
   $('three-mode').value=threeView.mode;
+  $('three-detail').value=threeView.manifest.levels?.overview?threeView.detail:'full';$('three-detail').disabled=threeView.mode!=='anatomy'||!threeView.manifest.levels?.overview;
   const anatomical=$('three-mode').querySelector('[value=anatomy]');anatomical.disabled=!threeView.available;
   anatomical.textContent=threeView.available?`Anatomical skeletons · ${threeView.available}/${data.neurons.length} available`:'Anatomical skeletons · not imported';
   $('three-edges').checked=threeView.showEdges;
-  $('three-status').textContent=threeView.mode==='anatomy'?`Real FlyWire-783 anatomy: ${threeView.skeletons.length}/${data.neurons.length} matching neurons. Source coordinates are rescaled together for display. Missing neurons are omitted.`:`Topology preview: ${data.neurons.length} model neurons in a 3D graph layout. This is not anatomical neuron shape. ${threeView.available ? `${threeView.available} matching anatomical skeletons can be loaded with the Geometry selector.`:'The public morphology source is identified, but no anatomical skeletons are bundled yet.'}`;
+  $('three-status').textContent=threeView.mode==='anatomy'?`Real FlyWire-783 anatomy: ${threeView.skeletons.length}/${data.neurons.length} matching neurons. ${threeView.detail==='overview'&&threeView.manifest.levels?.overview?'Fast overview hides fine terminal twigs; choose Full branches for full detail.':'Full branch detail at 0.25 µm path tolerance.'} Source coordinates are rescaled together.`:`Topology preview: ${data.neurons.length} model neurons in a 3D graph layout. This is not anatomical neuron shape. ${threeView.available ? `${threeView.available} matching anatomical skeletons can be loaded with the Geometry selector.`:'The public morphology source is identified, but no anatomical skeletons are bundled yet.'}`;
   document.body.dataset.three='ready';threeView.resize();
 }
 async function chooseThree(){
   $('three-status').hidden=false;document.body.dataset.three='loading';
   try{
+    $('three-status').textContent='Preparing the 3D anatomy explorer…';
     if(!threePromise)threePromise=import('./three-view.mjs');
     const {ThreeView}=await threePromise;
     $('three-wrap').hidden=false;$('three-controls').hidden=false;$('three-help').hidden=false;
@@ -343,8 +349,9 @@ $('three-wrap').addEventListener('three-error',event=>threeFailure(new Error(eve
 $('three-home').addEventListener('click',()=>threeView?.home());
 $('three-family').addEventListener('change',()=>threeView?.setFilter($('three-family').value));
 $('three-rotate').addEventListener('change',()=>{if(threeView)threeView.controls.autoRotate=$('three-rotate').checked;});
-$('three-edges').addEventListener('change',()=>{if(threeView){threeView.showEdges=$('three-edges').checked;threeView.lines.visible=threeView.showEdges;}});
-$('three-mode').addEventListener('change',async()=>{try{document.body.dataset.three='loading';await threeView.setMode($('three-mode').value);await syncThree();}catch(error){$('three-mode').value=threeView.mode;threeFailure(error);}});
+$('three-edges').addEventListener('change',()=>{if(threeView){threeView.showEdges=$('three-edges').checked;threeView.lines.visible=threeView.showEdges;threeView.dirty=true;}});
+$('three-detail').addEventListener('change',async()=>{if(!threeView)return;try{document.body.dataset.three='loading';threeView.detail=$('three-detail').value;await threeView.setMode('anatomy');await syncThree();}catch(error){threeFailure(error);}});
+$('three-mode').addEventListener('change',async()=>{try{geometryPreference=$('three-mode').value;document.body.dataset.three='loading';await threeView.setMode(geometryPreference);await syncThree();}catch(error){$('three-mode').value=threeView.mode;threeFailure(error);}});
 const tour = {index:-1, filtering:false};
 function endTour() {
   tour.index = -1; tour.filtering = false;
@@ -388,7 +395,7 @@ for (const id of ['all-edges', 'show-diff']) $(id).addEventListener('change', ma
 $('model').addEventListener('change', manualChange(restart)); $('angle').addEventListener('input', manualChange(restart));
 $('reset').addEventListener('click', restart);
 $('play').addEventListener('click', () => {
-  if (state.simulation.t >= 40) restart(); else { state.running = !state.running; state.lastStep = 0; updateNumbers(); }
+  if (state.simulation.t >= 40) restart(); else { state.running = !state.running; state.lastStep = 0;if(!state.running&&state.frame){for(let i=0;i<state.activity.length;i++)state.activity[i]=Math.max(0,state.frame.activity[i]);state.dirty=true;} updateNumbers(); }
 });
 document.addEventListener('visibilitychange', () => { state.lastStep = 0; });
 new ResizeObserver(resize).observe($('network').parentElement);
@@ -417,4 +424,5 @@ try {
   }
   $('study-results-link').href = study.source; $('tour-next').disabled = false;
   requestAnimationFrame(animate);
+  if(new URLSearchParams(location.search).get('view')!=='ring')chooseThree();
 } catch (error) { fail(error); }

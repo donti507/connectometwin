@@ -57,6 +57,51 @@ def decode_skeleton(raw):
     return [[v / 1000 for v in p] for p in xyz], edges
 
 
+def decode_swc_rows(rows):
+    """Map SWC node IDs to local indices; input coordinates are nanometers."""
+    ids = [row['node_id'] for row in rows]
+    if len(set(ids)) != len(ids):
+        raise ValueError('Duplicate SWC node IDs')
+    index = {node_id: i for i, node_id in enumerate(ids)}
+    vertices, edges = [], []
+    for i, row in enumerate(rows):
+        point = [float(row[axis]) / 1000 for axis in ('x', 'y', 'z')]
+        if not all(math.isfinite(v) for v in point):
+            raise ValueError('Non-finite anatomical coordinate')
+        vertices.append(point)
+        parent = row['parent_id']
+        if parent is None or parent < 0:
+            continue
+        if parent not in index:
+            raise ValueError(f'SWC parent {parent} is missing from its neuron')
+        if index[parent] == i:
+            raise ValueError('SWC self-parent edge')
+        edges.append((index[parent], i))
+    return vertices, edges
+
+
+def read_parquet_rows(path, wanted):
+    try:
+        import pyarrow.parquet as pq
+    except ImportError as error:
+        raise RuntimeError('Parquet imports require pyarrow: python -m pip install pyarrow') from error
+    file = pq.ParquetFile(path, memory_map=True, pre_buffer=False)
+    column = next((name for name in ('neuron', 'fragment_id') if name in file.schema_arrow.names), None)
+    if column is None:
+        raise ValueError('Parquet file has no neuron ID column')
+    columns = [column, 'node_id', 'parent_id', 'x', 'y', 'z']
+    if not set(columns).issubset(file.schema_arrow.names):
+        raise ValueError('Parquet must contain SWC node_id, parent_id and x/y/z columns')
+    grouped = {root_id: [] for root_id in wanted}
+    for batch in file.iter_batches(batch_size=8192, columns=columns, use_threads=False):
+        data = batch.to_pydict()
+        for i, value in enumerate(data[column]):
+            root_id = str(value)
+            if root_id in grouped:
+                grouped[root_id].append({name: data[name][i] for name in columns if name != column})
+    return grouped
+
+
 def simplify_skeleton(vertices, edges, tolerance=0.25):
     """Decimate only degree-two paths; retain every branch point and terminal.
 
@@ -114,6 +159,51 @@ def simplify_skeleton(vertices, edges, tolerance=0.25):
     return [[round(v, 4) for v in vertices[i]] for i in retained], [[remap[a], remap[b]] for a, b in output]
 
 
+def overview_skeleton(vertices, edges, minimum_terminal_length=5.0, tolerance=0.75):
+    """Display-only LOD: omit short terminal twigs, then simplify core paths."""
+    adjacency = [[] for _ in vertices]
+    for a, b in edges:
+        adjacency[a].append(b); adjacency[b].append(a)
+    remove = set()
+    for leaf, neighbors in enumerate(adjacency):
+        if len(neighbors) != 1:
+            continue
+        path = [leaf, neighbors[0]]
+        length = math.dist(vertices[path[0]], vertices[path[1]])
+        while len(adjacency[path[-1]]) == 2:
+            current = path[-1]
+            following = next(i for i in adjacency[current] if i != path[-2])
+            length += math.dist(vertices[current], vertices[following])
+            path.append(following)
+        if len(adjacency[path[-1]]) >= 3 and length < minimum_terminal_length:
+            remove.update(path[:-1])
+    remaining = [(a,b) for a,b in edges if a not in remove and b not in remove]
+    if not remaining:
+        return simplify_skeleton(vertices, edges, tolerance)
+    keep = sorted({i for edge in remaining for i in edge})
+    indices = {old:new for new,old in enumerate(keep)}
+    return simplify_skeleton([vertices[i] for i in keep], [(indices[a],indices[b]) for a,b in remaining], tolerance)
+
+
+def write_bundle(path, skeletons):
+    """Compact little-endian geometry, preserving IDs in the manifest as strings."""
+    temporary = path.with_suffix(path.suffix + '.tmp')
+    entries = []
+    with temporary.open('wb') as output:
+        output.write(b'CTSK0001')
+        for item in skeletons:
+            offset = output.tell()
+            output.write(struct.pack('<II', len(item['vertices']), len(item['edges'])))
+            for point in item['vertices']:
+                output.write(struct.pack('<fff', *point))
+            for edge in item['edges']:
+                output.write(struct.pack('<II', *edge))
+            entries.append({'id': item['id'], 'offset': offset, 'bytes': output.tell()-offset,
+                'vertices':len(item['vertices']), 'edges':len(item['edges']), 'source_sha256':item['source_sha256']})
+    temporary.replace(path)
+    return entries, hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def atomic_json(path, value):
     temporary = path.with_suffix(path.suffix + '.tmp')
     temporary.write_text(json.dumps(value, separators=(',', ':'), allow_nan=False) + '\n')
@@ -126,11 +216,18 @@ def main():
     parser.add_argument('--tolerance', type=float, default=0.25, help='Path simplification error, micrometers')
     parser.add_argument('--cache', type=Path, default=ROOT.parent.parent/'connectometwin-setup'/'anatomy-cache')
     parser.add_argument('--output', type=Path, default=ROOT/'web'/'data'/'anatomy')
+    parser.add_argument('--overview', action='store_true', help='Also generate a fast display-only LOD; retain the full bundle')
+    parser.add_argument('--bundle', action='store_true', help='Write a compact single-request browser bundle instead of individual JSON files')
+    parser.add_argument('--parquet', type=Path, help='Read a local FlyWire-783 SWC Parquet subset instead of downloading')
     parser.add_argument('--input-dir', type=Path, help='Read locally supplied <root-id> binary files instead of downloading')
     parser.add_argument('--license', help='Verified license identifier from the source record')
     parser.add_argument('--license-url', help='Authoritative license/source record URL')
     parser.add_argument('--allow-partial', action='store_true', help='Export successful IDs and explicitly list missing IDs')
     args = parser.parse_args()
+    if args.overview and not args.bundle:
+        parser.error('--overview requires --bundle')
+    if args.parquet and args.input_dir:
+        parser.error('Use either --parquet or --input-dir')
     if args.limit < 0 or args.tolerance < 0:
         parser.error('limit and tolerance must be non-negative')
     if bool(args.license) != bool(args.license_url):
@@ -151,10 +248,18 @@ def main():
     args.cache.mkdir(parents=True, exist_ok=True)
     args.output.mkdir(parents=True, exist_ok=True)
 
+    parquet_rows = read_parquet_rows(args.parquet, {n['id'] for n in neurons}) if args.parquet else None
+    parquet_sha256 = hashlib.sha256(args.parquet.read_bytes()).hexdigest() if args.parquet else None
+
     def fetch(neuron):
         root_id = neuron['id']; cache = args.cache/root_id
         try:
-            if args.input_dir:
+            if args.parquet:
+                if not parquet_rows[root_id]:
+                    raise ValueError('Neuron is absent from Parquet subset')
+                vertices, edges = decode_swc_rows(parquet_rows[root_id])
+                raw = None
+            elif args.input_dir:
                 raw = (args.input_dir/root_id).read_bytes()
             elif cache.exists():
                 raw = cache.read_bytes()
@@ -167,11 +272,12 @@ def main():
                 # Validate before retaining any cached artifact.
                 decode_skeleton(raw)
                 cache.write_bytes(raw)
-            vertices, edges = decode_skeleton(raw)
+            if raw is not None:
+                vertices, edges = decode_skeleton(raw)
             original_count = len(vertices)
             vertices, edges = simplify_skeleton(vertices, edges, args.tolerance)
             return {'id':root_id, 'vertices':vertices, 'edges':edges, 'original_vertices':original_count,
-                    'source_sha256':hashlib.sha256(raw).hexdigest()}, None
+                    'source_sha256':parquet_sha256 if args.parquet else hashlib.sha256(raw).hexdigest()}, None
         except Exception as error:
             return None, {'id':root_id,'error':str(error)}
 
@@ -189,15 +295,31 @@ def main():
         raise SystemExit('Incomplete download; existing published anatomy was left unchanged. Resolve access or use --allow-partial.')
     if not successful:
         raise SystemExit('No matching anatomy was imported; existing manifest was left unchanged.')
-    for value in successful:
-        atomic_json(args.output/(value['id']+'.json'),value)
+    bundle = None
+    if args.bundle:
+        entries, checksum = write_bundle(args.output/'flywire-783.ctsk', successful)
+        bundle = {'file':'flywire-783.ctsk','format':'ct-skeletons-v1','bytes':(args.output/'flywire-783.ctsk').stat().st_size,'sha256':checksum}
+    else:
+        for value in successful:
+            atomic_json(args.output/(value['id']+'.json'),value)
+        entries = [{'id':x['id'],'file':x['id']+'.json','vertices':len(x['vertices']),'edges':len(x['edges']),'source_sha256':x['source_sha256']} for x in successful]
     manifest = {'schema':1,'status':'ready' if len(successful)==len(data['neurons']) else 'partial',
         'dataset':'FlyWire materialization 783','coordinate_units':'micrometers',
-        'source':SOURCE,'source_record':'https://zenodo.org/records/10877326',
+        'source':('https://zenodo.org/records/10877326/files/sk_lod1_783_healed_ds2.parquet' if args.parquet else SOURCE),'source_record':'https://zenodo.org/records/10877326',
         'license':args.license,'license_url':args.license_url,'license_record_sha256':license_record_sha256,'simplification_tolerance_um':args.tolerance,
+        'source_subset_sha256':parquet_sha256,
+        'attribution':'Schlegel, P., & Jefferis, G. S. X. E. (2024). Supplemental Files for Schlegel et al., Nature (2024). Zenodo. DOI: 10.5281/zenodo.10877326',
+        'source_coordinate_units':'nanometers','source_vertices':sum(x['original_vertices'] for x in successful),
+        'display_vertices':sum(len(x['vertices']) for x in successful),'display_edges':sum(len(x['edges']) for x in successful),
         'circuit_neurons':len(data['neurons']),'requested_neurons':len(neurons),'missing':missing,
-        'neurons':[{'id':x['id'],'file':x['id']+'.json','vertices':len(x['vertices']),'edges':len(x['edges']),
-                    'source_sha256':x['source_sha256']} for x in successful]}
+        'bundle':bundle,'neurons':entries}
+    if args.overview:
+        overview = []
+        for item in successful:
+            points, edges = overview_skeleton(item['vertices'],item['edges'])
+            overview.append({**item,'vertices':points,'edges':edges})
+        overview_entries, overview_checksum = write_bundle(args.output/'flywire-783-overview.ctsk',overview)
+        manifest['levels'] = {'overview':{'bundle':{'file':'flywire-783-overview.ctsk','format':'ct-skeletons-v1','bytes':(args.output/'flywire-783-overview.ctsk').stat().st_size,'sha256':overview_checksum},'neurons':overview_entries,'minimum_terminal_length_um':5.0,'path_tolerance_um':0.75,'display_edges':sum(len(item['edges']) for item in overview),'note':'Display-only overview omits short terminal twigs; the full bundle retains all simplified branches.'}}
     atomic_json(args.output/'manifest.json',manifest)
     print(f'Imported {len(successful)}/{len(data["neurons"])} matching FlyWire neurons; {len(missing)} requests failed.')
 

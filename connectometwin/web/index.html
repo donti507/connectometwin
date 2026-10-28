@@ -13,7 +13,7 @@
   <a class="skip-link" href="#main">Skip to explorer</a>
   <header>
     <a class="brand" href="index.html"><span class="brand-mark">◎</span> ConnectomeTwin</a>
-    <span class="eyebrow">CIRCUIT EXPLORER <span class="tag">PHASE 06</span></span>
+    <span class="eyebrow">CIRCUIT EXPLORER <span class="tag">3D ANATOMY</span></span>
     <label class="theme-control" for="theme">Theme<select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
     <a href="self-check.html" class="check-link">Engine self-check ↗</a>
   </header>
@@ -48,7 +48,7 @@
       <section class="panel network-panel" aria-labelledby="network-title">
         <div class="panel-heading"><div><p class="eyebrow">01 / STRUCTURE & ACTIVITY</p><h2 id="network-title">Connection map</h2></div><span id="neuron-count" class="metric">— neurons</span></div>
         <div class="view-switch" role="group" aria-label="Circuit view"><button id="view-ring" class="secondary" aria-pressed="true">2D ring</button><button id="view-three" class="secondary" aria-pressed="false">3D explorer</button></div>
-        <div id="three-controls" hidden><label for="three-mode">Geometry<select id="three-mode"><option value="topology">Topology preview · not anatomical</option><option value="anatomy" disabled>Anatomical skeletons · not imported</option></select></label><label for="three-family">Neuron family<select id="three-family"><option value="all">All families</option><option>EPG</option><option>PEN_a</option><option>PEN_b</option><option>PEG</option><option>Delta7</option><option>ER</option></select></label><button id="three-home" class="secondary">Reset camera</button><label><input type="checkbox" id="three-rotate"> Rotate slowly</label><label><input type="checkbox" id="three-edges" checked> Show connection arcs</label></div>
+        <div id="three-controls" hidden><label for="three-mode">Geometry<select id="three-mode"><option value="topology">Topology preview · not anatomical</option><option value="anatomy">Anatomical skeletons · 433 FlyWire neurons</option></select></label><label for="three-detail">Branch detail<select id="three-detail"><option value="overview">Fast overview · fine twigs hidden</option><option value="full">Full branches · higher GPU cost</option></select></label><label for="three-family">Neuron family<select id="three-family"><option value="all">All families</option><option>EPG</option><option>PEN_a</option><option>PEN_b</option><option>PEG</option><option>Delta7</option><option>ER</option></select></label><button id="three-home" class="secondary">Reset camera</button><label><input type="checkbox" id="three-rotate"> Rotate slowly</label><label><input type="checkbox" id="three-edges" checked> Show connection arcs</label></div>
         <p id="three-status" class="panel-note" role="status" hidden></p>
         <div class="view-options"><label><input type="checkbox" id="all-edges"> All connections</label><label><input type="checkbox" id="show-diff"> Diff overlay</label></div>
         <div class="network-wrap"><canvas id="network" tabindex="0" role="img" aria-describedby="network-help neuron-details" aria-label="Neurons arranged by family and angle, with connections and live EPG activity"></canvas><div id="three-wrap" hidden></div><div id="tooltip" role="tooltip" hidden></div></div>
@@ -76,7 +76,7 @@
         </section>
       </div>
     </div>
-    <footer><div><p>Own wiring runs on A. Transplant runs A’s mapped parameters on B’s connections. All errors are wrapped angular errors in degrees.</p><nav aria-label="Research links"><a href="https://arxiv.org/abs/2610.29205">Read the paper ↗</a><a href="https://github.com/donti507/chessfly">ChessFly code &amp; results ↗</a></nav><p>Data credits: FlyWire, Janelia FlyEM (male CNS and hemibrain), and BANC connectomes. Imaging context: DANDI 000289 (Basnak et al., 2025); imaging data are not replayed in this demo. Original data retain their providers’ licenses.</p></div><span>Vanilla JS + Canvas · all data local</span></footer>
+    <footer><div><p>Own wiring runs on A. Transplant runs A’s mapped parameters on B’s connections. All errors are wrapped angular errors in degrees.</p><nav aria-label="Research links"><a href="https://arxiv.org/abs/2610.29205">Read the paper ↗</a><a href="https://github.com/donti507/chessfly">ChessFly code &amp; results ↗</a></nav><p>Data credits: FlyWire, Janelia FlyEM (male CNS and hemibrain), and BANC connectomes. Skeleton geometry: <a href="https://zenodo.org/records/10877326">Schlegel &amp; Jefferis (2024)</a>, <a href="data/anatomy/LICENSE.md">CC BY 4.0 · modifications and provenance</a>. Imaging context: DANDI 000289 (Basnak et al., 2025); imaging data are not replayed in this demo. Original data retain their providers’ licenses.</p></div><span>Vanilla JS + Canvas · all data local</span></footer>
     <p id="error-message" role="alert" hidden></p>
     <noscript>This explorer requires JavaScript. Serve this directory with a static HTTP server.</noscript>
   </main>

@@ -9,7 +9,7 @@ const ready=page=>page.waitForFunction(()=>document.body.dataset.ready==='ready'
   const context=await browser.newContext({viewport:{width:1366,height:1000},colorScheme:'light'});
   const page=await context.newPage(),errors=[],requests=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(r.url()));
-  await page.goto(base);await ready(page);
+  await page.goto(base+'?view=ring');await ready(page);
   const wiringNames=['mcns','mcns_neuprint','hemibrain','fafb','fafb_unfiltered','fafb_buhmann','banc'];
   const wiringRequests=()=>requests.filter(url=>wiringNames.some(name=>new URL(url).pathname.endsWith(`/data/${name}.json`)));
   assert.deepEqual(wiringRequests().map(url=>new URL(url).pathname.split('/').at(-1)).sort(),['fafb.json','fafb_buhmann.json']);
@@ -93,7 +93,7 @@ const ready=page=>page.waitForFunction(()=>document.body.dataset.ready==='ready'
   await page.locator('#theme').selectOption('light');await page.setViewportSize({width:390,height:844});await page.waitForTimeout(100);
   await page.screenshot({path:'/tmp/connectometwin-release-mobile.png',fullPage:true});
   const reduced=await browser.newPage({reducedMotion:'reduce',colorScheme:'light'});
-  await reduced.goto(base);await ready(reduced);assert.equal(await reduced.locator('#play').textContent(),'Play');await reduced.close();
+  await reduced.goto(base+'?view=ring');await ready(reduced);assert.equal(await reduced.locator('#play').textContent(),'Play');await reduced.close();
   assert.deepEqual(errors,[]);assert.ok(requests.every(url=>new URL(url).origin===new URL(base).origin));
   console.log('PASS: lazy requests/cache/latest-selection race; system/light/dark persistence and Canvas palettes; text contrast; keyboard details/shortcuts; named controls; 320–1366px layouts; reduced motion; offline assets; screenshot.');
  } finally {await browser.close();}
