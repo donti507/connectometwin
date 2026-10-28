@@ -1,0 +1,62 @@
+{
+ "versions": [
+  "mcns",
+  "mcns_neuprint",
+  "hemibrain",
+  "fafb",
+  "fafb_unfiltered",
+  "fafb_buhmann",
+  "banc"
+ ],
+ "names": {
+  "mcns": "male CNS v1.0",
+  "mcns_neuprint": "male CNS (neuPrint)",
+  "hemibrain": "hemibrain v1.2.1",
+  "fafb": "FlyWire (Princeton synapses)",
+  "fafb_unfiltered": "FlyWire (unfiltered)",
+  "fafb_buhmann": "FlyWire (Buhmann synapses)",
+  "banc": "BANC v888"
+ },
+ "fly": {
+  "mcns": "male CNS",
+  "mcns_neuprint": "male CNS",
+  "hemibrain": "hemibrain",
+  "fafb": "FlyWire",
+  "fafb_unfiltered": "FlyWire",
+  "fafb_buhmann": "FlyWire",
+  "banc": "BANC"
+ },
+ "base": {
+  "mcns_neuprint": "mcns",
+  "fafb_unfiltered": "fafb",
+  "fafb_buhmann": "fafb"
+ },
+ "same_fly_pairs": [
+  [
+   "fafb",
+   "fafb_buhmann"
+  ],
+  [
+   "fafb",
+   "fafb_unfiltered"
+  ],
+  [
+   "fafb_unfiltered",
+   "fafb_buhmann"
+  ],
+  [
+   "mcns",
+   "mcns_neuprint"
+  ]
+ ],
+ "model": {
+  "cue_steps": 5,
+  "micro_steps": 2,
+  "alpha": 0.5,
+  "spectral_radius": 0.9,
+  "update": "h <- 0.5 h + 0.5 (ReLU(h) W_g + u), W_g[i,j] = W[i,j] exp(g_i)",
+  "readout": "y = ReLU(h)*mask_EPG @ R + r; heading = atan2(y1, y0)",
+  "inputs": "t < cue_steps: u = (cue @ Wc + bc) on ER + bv on PEN; afterwards u = bc on ER + bv on PEN; cue = (cos, sin, 1)"
+ },
+ "source": "Yad & Nabila 2026, arXiv:2610.29205; Stage 4d networks, seed 0"
+}
