@@ -126,7 +126,7 @@ def main():
     for v in VERSIONS:
         S = W[v]; pre, post = np.nonzero(S)
         out = {"version": v, "name": NAMES[v], "fly": FLY[v],
-               "neurons": [{"id": str(b), "type": str(t), "family": f, "angle": r5(a)}
+               "neurons": [{"id": str(b), "type": str(t), "family": f, "angle": r5(a) if np.isfinite(a) else None}
                            for b, t, f, a in zip(data[v]["n"]["bodyId"], data[v]["n"]["type"], data[v]["fam"], data[v]["disp"])],
                "edges": {"pre": pre.tolist(), "post": post.tolist(), "w": [r5(x) for x in S[pre, post]]},
                "nets": {lab: {k: (vv.tolist()) for k, vv in net.items()} for lab, net in nets[v].items()}}

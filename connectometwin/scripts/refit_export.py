@@ -4,12 +4,18 @@ for the demo pairs and export the refitted gains. Same procedure as the paper: t
 (noise level 0.5, seed 0), one log-gain offset per TARGET cell type, Adam lr 0.02, batch 128,
 600 updates, everything else frozen.
 
-Colab (CPU is fine, about 5-10 minutes; GPU faster). Upload this file plus demo_data.zip, then:
+CPU is fine (about 5-10 minutes; GPU faster). From the repository root:
+    OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 python connectometwin/scripts/refit_export.py
+Output: connectometwin/web/data/refits.json.
+
+Colab: upload this file plus demo_data.zip, then:
     !unzip -oq demo_data.zip
-    !python refit_export.py
+    !python refit_export.py --data-dir demo_data
 Output: demo_data/refits.json  (send it back)
 """
+import argparse
 import json
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -19,7 +25,10 @@ PAIRS = [("fafb", "fafb_buhmann"), ("fafb_buhmann", "fafb"), ("fafb", "fafb_unfi
 CUE, MICRO, T, STEPS, BATCH, N_TRAIN = 5, 2, 40, 600, 128, 1000
 dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.manual_seed(0)
-D = "demo_data"
+parser = argparse.ArgumentParser(description="Refit transplanted gains and export refits.json")
+parser.add_argument("--data-dir", type=Path, default=Path(__file__).resolve().parents[1] / "web" / "data",
+                    help="directory containing exported wiring JSON (default: web/data)")
+D = parser.parse_args().data_dir
 maps = json.load(open(f"{D}/maps.json"))
 
 

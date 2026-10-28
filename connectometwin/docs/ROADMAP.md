@@ -5,13 +5,15 @@ One static web page (`web/index.html`, vanilla JS + Canvas, no build step) hoste
 
 ## Status
 - Phase 0 (scope): DONE. Main demo = FlyWire Princeton vs Buhmann synapses (same fly). 7 wirings selectable.
-- Phase 1 (data): DONE except refit. Data in `web/data/`. Remaining: run `scripts/refit_export.py` (Colab, CPU, ~10 min) -> produces `web/data/refits.json`.
-- Phases 2-6: TODO.
+- Phase 1 (data): DONE, including full 600-update gain refits for all five pairs in `web/data/refits.json`. Reproduce with `scripts/refit_export.py` (CPU PyTorch; defaults to `web/data/`).
+- Phase 2 (JS engine): DONE. Typed-array CSR engine in `web/js/engine.mjs`; all 46 Python reference cases pass within ±0.05 deg. Run `node connectometwin/tests/engine.test.mjs` from the repository root.
+- Phase 3 (visualization): DONE. Static Canvas explorer in `web/index.html`, with family rings, connection/diff layers, live EPG activity, heading dial and error trace. Browser reference gate in `web/self-check.html`.
+- Phases 4-6: TODO. Basic viewing/playback controls are included; transplantation, weight scaling, refit controls and guided story remain future work.
 
 ## Data contract (`web/data/`)
 - `index.json`: versions, display names, model equations, base fly for same-fly variants.
 - `<version>.json`:
-  - `neurons[i]`: `id, type, family (EPG|EPGt|PEN_a|PEN_b|PEG|Delta7|ER), angle` (radians, display position, aligned across flies)
+  - `neurons[i]`: `id, type, family (EPG|EPGt|PEN_a|PEN_b|PEG|Delta7|ER), angle` (radians, display position, aligned across flies; `null` when unavailable)
   - `edges`: sparse `pre[], post[], w[]` = signed, spectral-radius-scaled weights W[pre][post]
   - `nets.clean` and `nets.noise`: `g` (N), `Wc` (3 x N), `bc` (N), `bv` (N), `R` (N x 2), `r` (2)
 - `maps.json`: `"src__tgt"` -> array (len = N_tgt) of source neuron index for each target neuron.
