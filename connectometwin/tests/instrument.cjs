@@ -12,6 +12,7 @@ const base = process.env.CONNECTOMETWIN_URL || 'http://127.0.0.1:8000';
   await page.goto(base);
   await page.waitForFunction(()=>document.body.dataset.three==='ready' && document.body.dataset.benchmark==='ready');
   await page.locator('#play').click();
+  await page.locator('.viewer-settings summary').click();
   assert.equal(await page.locator('.family-chip').count(),6);
   assert.equal(await page.locator('#viewer-error').textContent(),await page.locator('#current-error').textContent());
   await page.locator('#show-diff').check();
@@ -32,9 +33,9 @@ const base = process.env.CONNECTOMETWIN_URL || 'http://127.0.0.1:8000';
   assert.match(await page.locator('#neuron-details').textContent(),/Neuron 1 of 433/);
   const layout=await page.evaluate(()=>{
    const r=selector=>document.querySelector(selector).getBoundingClientRect();
-   return {viewer:r('.network-panel').x,controls:r('.experiment-panel').x,telemetry:r('.right-column').y,viewerBottom:r('.network-panel').bottom};
+   return {viewer:r('.network-panel').x,controls:r('.experiment-panel').x,telemetry:r('.right-column').y,telemetryX:r('.right-column').x,viewerBottom:r('.network-panel').bottom};
   });
-  assert.ok(layout.viewer<layout.controls && layout.telemetry>=layout.viewerBottom);
+  assert.ok(layout.telemetryX>layout.viewer && Math.abs(layout.viewer-layout.controls)<1);
   if(await page.locator('#viewer-fullscreen').isVisible()) {
    await page.locator('#viewer-fullscreen').click();
    await page.waitForFunction(()=>!!document.fullscreenElement && document.getElementById('viewer-fullscreen').getAttribute('aria-label')==='Exit fullscreen viewer');

@@ -8,11 +8,18 @@ Compare reconstructions of the same fly compass circuit, watch a trained network
 
 The default 3D view now shows **real anatomical skeletons for all 433 FlyWire neurons**, with a 2.6 MB fast overview and optional 10.2 MB full detail. Fine terminal twigs are hidden in the overview; this screenshot shows full detail. [Full interface screenshot](connectometwin/docs/images/anatomy-full.png). Use **2D ring** for the original graph layout.
 
-## Instrument interface
+## Four-screen instrument interface
 
-The Stitch-inspired frontend puts real anatomy beside experiment controls, with live heading telemetry, neuron-family filters, an inspector, fullscreen, and the five-step guided story. It supports light/dark themes and phone layouts, uses local assets, and preserves the simulation engine. [Interface screenshot](connectometwin/docs/images/stitch-explorer.png).
+Explore the circuit, follow the guided story, compare wiring in a real weight matrix,
+and inspect individual neurons. The Stitch frontend now has four separate workspaces,
+locally served typography, camera overlays and bottom navigation.
+[Interface and data definitions](connectometwin/docs/STITCH-INTERFACE.md).
 
-WebGL 2 and browser graphics acceleration are required for 3D. If graphics initialization fails, the scientific controls and 2D ring remain available.
+![Four-screen frontend with real neuron anatomy](connectometwin/docs/images/workspace-explore.png)
+
+The 3D renderer uses full branches on hardware GPUs, depth cues, cleaner colors and
+selection dimming. A labelled Canvas projection of the **same real skeletons** is
+available when WebGL cannot start; it runs more slowly. The 2D ring remains available.
 
 ## Run locally
 

@@ -36,7 +36,7 @@ const ready=page=>page.waitForFunction(()=>document.body.dataset.ready==='ready'
    assert.ok(contrast.every(x=>x>=4.5),`${theme} text contrast: ${contrast}`);
    const pixel=await page.locator('#network').evaluate(canvas=>Array.from(canvas.getContext('2d').getImageData(0,0,1,1).data));
    await page.waitForTimeout(60);
-   const expected=theme==='light'?[255,255,255]:[17,23,34];
+   const expected=theme==='light'?[255,255,255]:[24,27,37];
    const actual=await page.locator('#network').evaluate(canvas=>Array.from(canvas.getContext('2d').getImageData(0,0,1,1).data));
    assert.deepEqual(actual.slice(0,3),expected);
   }

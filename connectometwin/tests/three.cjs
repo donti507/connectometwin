@@ -15,6 +15,7 @@ const ready=page=>page.waitForFunction(()=>document.body.dataset.ready==='ready'
   assert.ok(!requests.some(url=>url.includes('/vendor/')),'3D code should not load for 2D visitors');
   await page.locator('#view-three').click();
   await page.waitForFunction(()=>document.body.dataset.three==='ready');
+  await page.locator('.viewer-settings summary').click();
   assert.match(await page.locator('#three-status').textContent(),/433\/433 matching neurons/);
   assert.equal(await page.locator('#three-mode option[value=anatomy]').evaluate(option=>option.disabled),false);
   const overviewSegments=Number(await page.locator('#three-wrap').getAttribute('data-segments'));assert.ok(overviewSegments>0&&overviewSegments<500000);
@@ -38,9 +39,10 @@ const ready=page=>page.waitForFunction(()=>document.body.dataset.ready==='ready'
   assert.equal(await page.locator('#benchmark-error').textContent(),'15.92°');
   await page.locator('#show-diff').check();assert.equal(await page.locator('#three-edges').isChecked(),true,'Diff overlay must show its 3D arcs');
   await page.locator('#show-diff').uncheck();assert.equal(await page.locator('#three-edges').isChecked(),false);
-  await page.locator('#tour-next').click();await ready(page);await page.waitForFunction(()=>document.body.dataset.three==='ready');
+  await page.locator('.main-nav [data-screen-link=story]').click();await ready(page);await page.waitForFunction(()=>document.body.dataset.three==='ready');
   await page.locator('#tour-next').click();await ready(page);await page.waitForFunction(()=>document.body.dataset.three==='ready');assert.equal(await page.locator('#three-edges').isChecked(),true);
   await page.locator('#tour-next').click();await ready(page);await page.waitForFunction(()=>document.body.dataset.three==='ready');assert.equal(await page.locator('#three-edges').isChecked(),false);
+  await page.locator('.main-nav [data-screen-link=explore]').click();
   await page.locator('#three-home').click();
   await page.locator('#theme').selectOption('dark');await page.waitForTimeout(100);
   await page.screenshot({path:'/tmp/connectometwin-three-real.png',fullPage:true});
@@ -48,12 +50,13 @@ const ready=page=>page.waitForFunction(()=>document.body.dataset.ready==='ready'
   assert.equal(await page.locator('#network').isVisible(),true);
   assert.equal(await page.locator('#three-wrap').isVisible(),false);
   assert.equal(await page.locator('#view-ring').getAttribute('aria-pressed'),'true');
-  // Route-only test geometry checks the anatomy path without claiming that the
-  // blocked public skeletons have actually been downloaded.
+  // A route-only fixture checks legacy JSON and stale-load protection.
+  // Real bundled morphology is validated above.
   const id='720575940604801993';
   await page.route('**/data/anatomy/manifest.json',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({schema:1,status:'partial',neurons:[{id,file:id+'.json'}]})}));
   await page.route('**/data/anatomy/'+id+'.json',async route=>{await new Promise(resolve=>setTimeout(resolve,200));return route.fulfill({contentType:'application/json',body:JSON.stringify({id,vertices:[[0,0,0],[1,0,0],[2,1,0],[2,-1,0]],edges:[[0,1],[1,2],[1,3]]})});});
   await page.goto(base+'?view=ring&geometry=topology');await ready(page);await page.locator('#view-three').click();
+  await page.locator('.viewer-settings summary').click();
   await page.waitForFunction(()=>document.body.dataset.three==='ready');
   await page.locator('#three-mode').selectOption('anatomy');
   await page.locator('#three-mode').selectOption('topology');
@@ -71,14 +74,15 @@ const ready=page=>page.waitForFunction(()=>document.body.dataset.ready==='ready'
   await page.setViewportSize({width:390,height:844});await page.waitForTimeout(120);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   const landing=await browser.newPage();await landing.goto(base);await landing.waitForFunction(()=>document.body.dataset.three==='ready'&&document.getElementById('three-wrap').dataset.mode==='anatomy');assert.equal(await landing.locator('#three-wrap').getAttribute('data-neurons'),'433');await landing.close();
-  // A browser without WebGL must retain a usable 2D simulator.
+  // A browser without WebGL retains real anatomical projection and the ring.
   const fallback=await browser.newPage();
   await fallback.addInitScript(()=>{const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return /webgl/.test(type)?null:original.call(this,type,...args);};});
   await fallback.goto(base+'?view=ring');await ready(fallback);await fallback.locator('#view-three').click();
-  await fallback.waitForFunction(()=>document.body.dataset.three==='failed');
-  assert.equal(await fallback.locator('#view-ring').getAttribute('aria-pressed'),'true');
-  assert.equal(await fallback.locator('#network').isVisible(),true);
-  assert.match(await fallback.locator('#three-status').textContent(),/2D ring remains available/);
+  await fallback.waitForFunction(()=>document.body.dataset.three==='ready');
+  assert.equal(await fallback.locator('body').getAttribute('data-renderer'),'canvas-projection');
+  assert.equal(await fallback.locator('#three-wrap').getAttribute('data-mode'),'anatomy');
+  assert.match(await fallback.locator('#three-status').textContent(),/Canvas projection/);
+  await fallback.locator('#view-ring').click();assert.equal(await fallback.locator('#network').isVisible(),true);
   await fallback.close();
   assert.deepEqual(errors,[]);
   assert.ok(requests.every(url=>new URL(url).origin===new URL(base).origin));

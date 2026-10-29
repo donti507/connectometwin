@@ -179,6 +179,7 @@ function updateNumbers() {
   const errors = state.trace.slice(5);
   $('mean-error').textContent = errors.length ? `${(errors.reduce((a, b) => a + b, 0) / errors.length).toFixed(2)}°` : '—';
   $('play').textContent = state.running ? 'Pause' : state.simulation?.t === 40 ? 'Replay' : 'Play';
+  window.dispatchEvent(new Event('explorer-update'));
 }
 function selection() {
   return {a:$('wiring').value, b:$('compare').value, mode:$('mode').value,
@@ -289,6 +290,7 @@ function describeNeuron(index) {
   if (!neuron) return;
   selectedNeuron = index; state.dirty=true; threeView?.select(index);
   $('neuron-details').textContent = `Neuron ${index+1} of ${state.points.length}: ${neuron.type}, ${neuron.family}, ID ${neuron.id}. ${state.points[index].fallback ? 'Angle unavailable; fallback position.' : `Ring-layout angle ${degrees(neuron.angle).toFixed(1)} degrees.`} Activity ${Math.max(0,state.frame?.activity[index] || 0).toFixed(3)}.`;
+  window.dispatchEvent(new Event('neuron-selected'));
 }
 canvas.addEventListener('keydown',event=>{
   if (!state.points.length || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
@@ -326,6 +328,9 @@ async function syncThree(){
   anatomical.textContent=threeView.available?`Anatomical skeletons · ${threeView.available}/${data.neurons.length} available`:'Anatomical skeletons · not imported';
   $('three-edges').checked=threeView.showEdges;
   $('three-status').textContent=threeView.mode==='anatomy'?`Real FlyWire-783 anatomy: ${threeView.skeletons.length}/${data.neurons.length} matching neurons. ${threeView.detail==='overview'&&threeView.manifest.levels?.overview?'Fast overview hides fine terminal twigs; choose Full branches for full detail.':'Full branch detail at 0.25 µm path tolerance.'} Source coordinates are rescaled together.`:`Topology preview: ${data.neurons.length} model neurons in a 3D graph layout. This is not anatomical neuron shape. ${threeView.available ? `${threeView.available} matching anatomical skeletons can be loaded with the Geometry selector.`:'The public morphology source is identified, but no anatomical skeletons are bundled yet.'}`;
+  if(threeView.projection)$('three-status').textContent='WebGL unavailable: displaying real anatomy with a Canvas projection. Drag to rotate; scroll to zoom. Lower refresh rate; browser graphics acceleration enables full 3D. '+$('three-status').textContent;
+  if(selectedNeuron>=0){threeView.select(selectedNeuron);if(document.body.dataset.screen==='neuron')threeView.focusSelected();}
+  document.body.dataset.renderer=threeView.projection?'canvas-projection':'webgl';
   document.body.dataset.three='ready';threeView.resize();
 }
 async function chooseThree(){
@@ -335,7 +340,12 @@ async function chooseThree(){
     if(!threePromise)threePromise=import('./three-view.mjs');
     const {ThreeView}=await threePromise;
     $('three-wrap').hidden=false;$('three-controls').hidden=false;$('three-help').hidden=false;
-    if(!threeView){threeView=new ThreeView($('three-wrap'),describeNeuron);threeView.setTheme(palette,colors);}
+    if(!threeView){
+      const probe=document.createElement('canvas'),context=probe.getContext('webgl2');
+      if(context){context.getExtension('WEBGL_lose_context')?.loseContext();try{threeView=new ThreeView($('three-wrap'),describeNeuron);}catch{const {ProjectedView}=await import('./projected-view.mjs');threeView=new ProjectedView($('three-wrap'),describeNeuron);}}
+      else {const {ProjectedView}=await import('./projected-view.mjs');threeView=new ProjectedView($('three-wrap'),describeNeuron);}
+      threeView.setTheme(palette,colors);
+    }
     viewMode='three';$('network').style.visibility='hidden';$('network').tabIndex=-1;$('network').setAttribute('aria-hidden','true');
     $('network-help').hidden=true;$('tooltip').hidden=true;
     $('connection-note').hidden=true;$('diff-note').hidden=true;
@@ -426,3 +436,9 @@ try {
   requestAnimationFrame(animate);
   if(new URLSearchParams(location.search).get('view')!=='ring')chooseThree();
 } catch (error) { fail(error); }
+
+// Read-only presentation snapshot and explicit UI actions. The engine is unchanged.
+export function explorerSnapshot(){return {data:state.data[state.current],a:state.data[$('wiring').value],b:state.data[$('compare').value],index:state.index,diffs:state.diffs,reference:state.reference,refits:state.refits,frame:state.frame,trace:state.trace,selected:selectedNeuron,run:state.run,tourIndex:tour.index,filtering:tour.filtering,view:threeView};}
+export function inspectNeuron(index){if(Number.isInteger(index)&&index>=0&&index<(state.data[state.current]?.neurons.length||0))describeNeuron(index);}
+export async function jumpTour(index){await applyTour(index);}
+export function cameraAction(action){if(!threeView)return;if(action==='home')threeView.home();else if(action==='isolate')threeView.isolate(selectedNeuron);else if(action==='clear')threeView.isolate(-1);else if(action==='focus')threeView.focusSelected();else if(action==='zoom-in'||action==='zoom-out'){if(threeView.projection){threeView.zoomBy(action==='zoom-in'?1.2:.83);return;}threeView.camera.position.sub(threeView.controls.target).multiplyScalar(action==='zoom-in'?.83:1.2).add(threeView.controls.target);threeView.dirty=true;}}

@@ -5,13 +5,14 @@ import {topologyPositions,validateSkeleton,matchAnatomy,normalizeSkeletons,decod
 
 export class ThreeView {
   constructor(container,onSelect) {
-    this.container=container;this.onSelect=onSelect;this.family='all';this.mode='topology';this.detail='overview';this.selected=-1;this.showEdges=true;this.adjacent=new Set();this.white=new THREE.Color(0xffffff);
+    this.container=container;this.onSelect=onSelect;this.family='all';this.mode='topology';this.detail='overview';this.selected=-1;this.isolated=-1;this.showEdges=true;this.adjacent=new Set();this.white=new THREE.Color(0xffffff);
     this.scene=new THREE.Scene();this.camera=new THREE.PerspectiveCamera(42,1,.01,100);
     let canvas=document.createElement('canvas'),context=canvas.getContext('webgl2',{antialias:true,alpha:false,powerPreference:'high-performance'});
     const debug=context?.getExtension('WEBGL_debug_renderer_info');
     this.software=Boolean(debug&&/swiftshader|llvmpipe|software|lavapipe/i.test(context.getParameter(debug.UNMASKED_RENDERER_WEBGL)));
     if(this.software){context.getExtension('WEBGL_lose_context')?.loseContext();canvas=undefined;context=undefined;}
     this.renderer=new THREE.WebGLRenderer({canvas,context,antialias:!this.software,alpha:false,powerPreference:'high-performance'});
+    this.detail=this.software?'overview':'full';
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,this.software?1:2));this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.renderer.domElement.tabIndex=0;this.renderer.domElement.setAttribute('role','img');
     this.renderer.domElement.setAttribute('aria-label','Interactive 3D circuit. Drag to rotate, scroll to zoom, arrow keys to pan, plus or minus to zoom, Home to reset, brackets to select neurons.');
@@ -45,7 +46,7 @@ export class ThreeView {
   setTheme(palette,colors){this.palette=palette;this.colors=colors;this.scene.background=new THREE.Color(palette.surface);if(this.data)this.rebuild();}
   clear(group){for(const object of [...group.children]){group.remove(object);object.geometry?.dispose();if(Array.isArray(object.material))object.material.forEach(m=>m.dispose());else object.material?.dispose();}}
   async setWiring(data,options={}) {
-    const revision=++this.revision;this.data=data;this.options=options;this.selected=-1;this.adjacent.clear();this.skeletons=[];this.mode='topology';this.showEdges=true;
+    const revision=++this.revision;this.data=data;this.options=options;this.selected=-1;this.isolated=-1;this.adjacent.clear();this.skeletons=[];this.mode='topology';this.showEdges=true;
     if(!this.manifest) {const response=await fetch('data/anatomy/manifest.json');if(!response.ok)throw new Error(`Anatomy manifest: HTTP ${response.status}`);this.manifest=await response.json();}
     if(revision!==this.revision)return false;
     const matches=matchAnatomy(this.manifest,data.neurons);
@@ -87,12 +88,18 @@ export class ThreeView {
     if(!this.data||!this.colors)return;
     this.dirty=true;this.clear(this.nodes);this.clear(this.lines);
     const n=this.data.neurons.length;this.stateValues=new Float32Array(n*4);
-    this.neuronRanges=new Array(n);this.baseColors=this.data.neurons.map(neuron=>new THREE.Color(this.colors[families.indexOf(familyOf(neuron))]));
+    this.neuronRanges=new Array(n);this.baseColors=this.data.neurons.map(neuron=>{
+      // Stable per-neuron grading is cosmetic, never a new biological measurement.
+      const color=new THREE.Color(this.colors[families.indexOf(familyOf(neuron))]);
+      const seed=Number(BigInt(neuron.id)%97n)/96;
+      return color.offsetHSL((seed-.5)*.035,(seed-.5)*.06,(seed-.5)*.07);
+    });
     this.positions=topologyPositions(this.data.neurons);this.present=new Set();this.geometryOwners=[];
     const segmentCount=this.mode==='anatomy'?this.skeletons.reduce((sum,s)=>sum+edgeCount(s),0):0;
     const xyz=new Float32Array(segmentCount*6),rgba=new Uint8Array(segmentCount*8);
     this.geometryOwners=new Uint32Array(segmentCount);let segment=0;
     this.scene.background=new THREE.Color(this.mode==='anatomy'&&new THREE.Color(this.palette.surface).getHex()<0x555555?'#05090e':this.palette.surface);
+    this.scene.fog=this.mode==='anatomy'?new THREE.FogExp2(this.scene.background,.11):null;
     this.fitRadius=1.3;
     if(this.mode==='anatomy'){
       const normalized=normalizeSkeletons(this.skeletons),indices=new Map(this.data.neurons.map((neuron,i)=>[neuron.id,i]));
@@ -115,7 +122,7 @@ export class ThreeView {
       }
       this.fitRadius=Math.sqrt(radiusSquared);
     }else for(let i=0;i<n;i++)this.present.add(i);
-    if(segmentCount){const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(xyz,3));geometry.setAttribute('color',new THREE.BufferAttribute(rgba,4,true).setUsage(THREE.DynamicDrawUsage));this.skeletonLines=new THREE.LineSegments(geometry,this.material(.87));this.nodes.add(this.skeletonLines);}else this.skeletonLines=null;
+    if(segmentCount){const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(xyz,3));geometry.setAttribute('color',new THREE.BufferAttribute(rgba,4,true).setUsage(THREE.DynamicDrawUsage));this.skeletonLines=new THREE.LineSegments(geometry,this.material(this.detail==='full'?.57:.74));this.nodes.add(this.skeletonLines);}else this.skeletonLines=null;
     // Small selectable markers indicate neuron anchors, not reconstructed somata.
     const markerGeometry=new THREE.BufferGeometry();markerGeometry.setAttribute('position',new THREE.Float32BufferAttribute(this.positions.flat(),3));markerGeometry.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(n*3),3));markerGeometry.setAttribute('pointSize',new THREE.Float32BufferAttribute(new Float32Array(n),1));
     const markerMaterial=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{viewportScale:{value:this.renderer.domElement.height/(2*Math.tan(THREE.MathUtils.degToRad(this.camera.fov/2)))}},vertexShader:`attribute vec3 color;attribute float pointSize;uniform float viewportScale;varying vec3 tint;varying float visibility;void main(){visibility=step(0.00001,pointSize);tint=color;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;gl_PointSize=pointSize>0.0?clamp(pointSize*viewportScale/-mv.z,1.0,64.0):0.0;}`,fragmentShader:`varying vec3 tint;varying float visibility;void main(){if(visibility<0.5)discard;float radius=length(gl_PointCoord-vec2(0.5));if(radius>0.5)discard;gl_FragColor=vec4(tint,exp(-radius*radius*12.0));
@@ -151,9 +158,10 @@ export class ThreeView {
     let peak=0;for(let i=0;i<this.data.neurons.length;i++)if(familyOf(this.data.neurons[i])==='EPG')peak=Math.max(peak,activity?.[i]||0);
     const changed=[];
     for(let i=0;i<this.data.neurons.length;i++){
-      const family=familyOf(this.data.neurons[i]),visible=this.present.has(i)&&(this.family==='all'||this.family===family);
+      const family=familyOf(this.data.neurons[i]),visible=this.present.has(i)&&(this.family==='all'||this.family===family)&&(this.isolated<0||i===this.isolated);
+      const opacity=visible?(this.selected<0||i===this.selected?1:this.adjacent.has(i)?.18:.055):0;
       const intensity=family==='EPG'&&peak>0?Math.max(0,activity?.[i]||0)/peak:0;
-      const values=[intensity,+(i===this.selected),+this.adjacent.has(i),+visible];let difference=false;
+      const values=[intensity,+(i===this.selected),+this.adjacent.has(i),opacity];let difference=false;
       for(let k=0;k<4;k++){if(Math.abs(this.stateValues[i*4+k]-values[k])>1e-5)difference=true;this.stateValues[i*4+k]=values[k];}
       if(difference)changed.push(i);
     }
@@ -161,12 +169,12 @@ export class ThreeView {
     this.dirty=true;const attribute=this.skeletonLines?.geometry.getAttribute('color');
     for(const i of changed){
       const intensity=this.stateValues[i*4],visible=this.stateValues[i*4+3];
-      this.color.copy(this.baseColors[i]);if(i===this.selected)this.color.set(this.palette.cue);else this.color.lerp(this.white,intensity*.8);
-      this.markers.geometry.getAttribute('color').setXYZ(i,this.color.r,this.color.g,this.color.b);this.markers.geometry.getAttribute('pointSize').setX(i,visible?(this.mode==='anatomy'?.018:.055)*(1+intensity*1.7):0);
+      this.color.copy(this.baseColors[i]);if(i===this.selected)this.color.set(this.palette.cue);else this.color.lerp(this.white,intensity*.25);
+      this.markers.geometry.getAttribute('color').setXYZ(i,this.color.r,this.color.g,this.color.b);this.markers.geometry.getAttribute('pointSize').setX(i,visible?(this.mode==='anatomy'?.009:.055)*(1+intensity*1.7):0);
       const range=this.neuronRanges[i];
       if(attribute&&range){
-        this.color.copy(this.baseColors[i]).lerp(this.white,Math.min(.95,intensity*.75+this.stateValues[i*4+1]*.9+this.stateValues[i*4+2]*.25));
-        const r=Math.round(this.color.r*255),g=Math.round(this.color.g*255),b=Math.round(this.color.b*255),a=visible?255:0;
+        this.color.copy(this.baseColors[i]).lerp(this.white,Math.min(.65,intensity*.24+this.stateValues[i*4+1]*.55+this.stateValues[i*4+2]*.10));
+        const r=Math.round(this.color.r*255),g=Math.round(this.color.g*255),b=Math.round(this.color.b*255),a=Math.round(visible*255);
         for(let vertex=range.start;vertex<range.start+range.count;vertex++){const offset=vertex*4;attribute.array[offset]=r;attribute.array[offset+1]=g;attribute.array[offset+2]=b;attribute.array[offset+3]=a;}
         attribute.addUpdateRange(range.start*4,range.count*4);
       }
@@ -174,12 +182,14 @@ export class ThreeView {
     if(attribute)attribute.needsUpdate=true;
     this.markers.geometry.getAttribute('color').needsUpdate=true;this.markers.geometry.getAttribute('pointSize').needsUpdate=true;
   }
+  isolate(index){this.isolated=index;this.updateActivity(this.activity);this.updateEdges();if(index>=0)this.focusSelected();else this.home();}
+  focusSelected(){if(this.selected<0||!this.positions?.[this.selected])return;const target=new THREE.Vector3(...this.positions[this.selected]);const direction=this.camera.position.clone().sub(this.controls.target).normalize();this.controls.target.copy(target);this.camera.position.copy(target).addScaledVector(direction,1.55);this.controls.update();this.dirty=true;}
   updateEdges(){
     if(!this.connections || !this.edgeColors)return;
     const attribute=this.connections.geometry.getAttribute('color');
     for(let k=0;k<this.edgePairs.length;k++){
       const [a,b]=this.edgePairs[k];
-      const visible=this.present.has(a)&&this.present.has(b)&&(this.family==='all'||(familyOf(this.data.neurons[a])===this.family&&familyOf(this.data.neurons[b])===this.family));
+      const visible=this.present.has(a)&&this.present.has(b)&&(this.isolated<0||a===this.isolated||b===this.isolated)&&(this.family==='all'||(familyOf(this.data.neurons[a])===this.family&&familyOf(this.data.neurons[b])===this.family));
       const factor=visible?(this.selected<0||a===this.selected||b===this.selected?1:.1):0;
       for(let vertex=0;vertex<2;vertex++){const start=k*8+vertex*4;for(let component=0;component<3;component++)attribute.array[start+component]=this.edgeColors[start+component];attribute.array[start+3]=factor;}
     }

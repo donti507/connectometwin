@@ -232,32 +232,25 @@ The fast overview keeps all 433 neurons but omits terminal twigs shorter than
 lightweight point sprites replace sphere meshes for anchor/activity markers.
 
 
-## Stitch instrument frontend
+## Four-screen Stitch instrument frontend
 
-The uploaded Stitch explorer, guided-story, difference and neuron-inspector designs
-are adapted in `web/instrument.css` and `web/js/instrument.mjs`. They use native
-controls and the existing renderer, rather than the export's Tailwind CDN, remote
-placeholder image, fabricated counts, login, or scripted mock simulation.
-The instrument module only forwards controls and mirrors existing text results;
-`engine.mjs`, the model inputs and reference values remain unchanged.
+See [STITCH-INTERFACE.md](docs/STITCH-INTERFACE.md) for screen routes, exact
+measurement definitions, fonts, rendering, the Canvas anatomy fallback and checks.
 
-Desktop uses a main anatomical viewport, experiment sidebar and lower telemetry.
-Phones stack these panels without restricting browser zoom. Family chips drive
-the existing 3D family filter; fullscreen is offered only where supported. The
-guided-story navigation starts the existing five-step tour. Difference counts
-come from the existing same-fly comparison, independently of displayed edge caps.
-The dark palette follows the supplied navy/cyan design; system and explicit light
-and dark preferences remain supported. No fonts, scripts or images are fetched
-from external services at runtime. WebGL failure still falls back to the 2D ring.
+The supplied design's four screens are implemented with real model/data readouts,
+including a family-level weight matrix and neuron morphology/partner statistics.
+No mock voltage, spike, confidence or synapse-site numbers are displayed.
+`engine.mjs`, anatomical coordinate bundles and model reference values are unchanged.
 
-![Stitch-inspired instrument interface with real anatomical neurons](docs/images/stitch-explorer.png)
-
-Additional frontend integration check, with the static server running:
+With the static server running and Playwright/Chromium available:
 
 ```sh
+node connectometwin/tests/workspaces.cjs
 node connectometwin/tests/instrument.cjs
 ```
 
-This optional test uses Playwright and Chromium like the existing browser checks,
-and covers family-filter synchronization, neuron selection, fullscreen, guided
-navigation, offline assets and light/dark layouts from 320 to 1440 pixels.
+The local WebGL renderer uses full detail on hardware and overview on detected
+software GPUs. A labelled Canvas projection keeps real branching anatomy available
+when WebGL is unavailable, at a lower refresh rate. Browser graphics acceleration
+is recommended for full-detail interaction. See the rendering limitations in the
+interface notes and the anatomical data provenance in [3D-ANATOMY.md](docs/3D-ANATOMY.md).
