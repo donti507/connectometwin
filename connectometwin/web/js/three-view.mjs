@@ -6,6 +6,7 @@ import {topologyPositions,validateSkeleton,matchAnatomy,normalizeSkeletons,decod
 export class ThreeView {
   constructor(container,onSelect) {
     this.container=container;this.onSelect=onSelect;this.family='all';this.mode='topology';this.detail='overview';this.selected=-1;this.isolated=-1;this.showEdges=true;this.adjacent=new Set();this.white=new THREE.Color(0xffffff);
+    this.present=new Set();this.positions=[];
     this.scene=new THREE.Scene();this.camera=new THREE.PerspectiveCamera(42,1,.01,100);
     let canvas=document.createElement('canvas'),context=canvas.getContext('webgl2',{antialias:true,alpha:false,powerPreference:'high-performance'});
     const debug=context?.getExtension('WEBGL_debug_renderer_info');
@@ -46,7 +47,7 @@ export class ThreeView {
   setTheme(palette,colors){this.palette=palette;this.colors=colors;this.scene.background=new THREE.Color(palette.surface);if(this.data)this.rebuild();}
   clear(group){for(const object of [...group.children]){group.remove(object);object.geometry?.dispose();if(Array.isArray(object.material))object.material.forEach(m=>m.dispose());else object.material?.dispose();}}
   async setWiring(data,options={}) {
-    const revision=++this.revision;this.data=data;this.options=options;this.selected=-1;this.isolated=-1;this.adjacent.clear();this.skeletons=[];this.mode='topology';this.showEdges=true;
+    const revision=++this.revision;this.present=new Set();this.stateValues=null;this.data=data;this.options=options;this.selected=-1;this.isolated=-1;this.adjacent.clear();this.skeletons=[];this.mode='topology';this.showEdges=true;
     if(!this.manifest) {const response=await fetch('data/anatomy/manifest.json');if(!response.ok)throw new Error(`Anatomy manifest: HTTP ${response.status}`);this.manifest=await response.json();}
     if(revision!==this.revision)return false;
     const matches=matchAnatomy(this.manifest,data.neurons);
@@ -197,10 +198,12 @@ export class ThreeView {
   }
 
   pick(event){
+    if(!this.stateValues||!this.data)return;
     const rect=this.renderer.domElement.getBoundingClientRect(),pointer=new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),ray=new THREE.Raycaster();ray.params.Line.threshold=.018;ray.params.Points.threshold=.025;ray.setFromCamera(pointer,this.camera);
     const hits=ray.intersectObjects([this.markers,...(this.skeletonLines?[this.skeletonLines]:[])]);
     for(const hit of hits){const index=hit.object===this.markers?hit.index:this.geometryOwners[Math.floor(hit.index/2)];if(index!==undefined&&this.stateValues[index*4+3]){this.select(index);this.onSelect(index);break;}}
   }
-  render(){this.controls.update();if(this.dirty){this.renderer.render(this.scene,this.camera);this.dirty=false;}}
+  selectionScreen(){if(this.selected<0||!this.positions?.[this.selected]||!this.stateValues?.[this.selected*4+3])return null;const point=new THREE.Vector3(...this.positions[this.selected]).project(this.camera);if(point.z < -1||point.z>1||!Number.isFinite(point.x)||!Number.isFinite(point.y))return null;const rect=this.container.getBoundingClientRect();return {x:(point.x+1)*rect.width/2,y:(1-point.y)*rect.height/2};}
+  render(){this.controls.update();if(this.dirty){this.renderer.render(this.scene,this.camera);this.dirty=false;this.container.dispatchEvent(new Event('view-rendered'));}}
   dispose(){this.revision++;this.resizeObserver.disconnect();this.controls.dispose();this.clear(this.nodes);this.clear(this.lines);this.texture?.dispose();this.renderer.dispose();this.renderer.domElement.remove();}
 }

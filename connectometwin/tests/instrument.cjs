@@ -35,7 +35,7 @@ const base = process.env.CONNECTOMETWIN_URL || 'http://127.0.0.1:8000';
    const r=selector=>document.querySelector(selector).getBoundingClientRect();
    return {viewer:r('.network-panel').x,controls:r('.experiment-panel').x,telemetry:r('.right-column').y,telemetryX:r('.right-column').x,viewerBottom:r('.network-panel').bottom};
   });
-  assert.ok(layout.telemetryX>layout.viewer && Math.abs(layout.viewer-layout.controls)<1);
+  assert.ok(layout.controls>layout.viewer && layout.telemetry>=layout.viewerBottom);
   if(await page.locator('#viewer-fullscreen').isVisible()) {
    await page.locator('#viewer-fullscreen').click();
    await page.waitForFunction(()=>!!document.fullscreenElement && document.getElementById('viewer-fullscreen').getAttribute('aria-label')==='Exit fullscreen viewer');
@@ -46,6 +46,7 @@ const base = process.env.CONNECTOMETWIN_URL || 'http://127.0.0.1:8000';
   await page.waitForFunction(()=>!document.getElementById('tour-exit').hidden && document.body.dataset.benchmark==='ready');
   assert.match(await page.locator('#tour-progress').textContent(),/1/);
   await page.locator('#tour-exit').click();
+  await page.waitForFunction(()=>document.body.dataset.page==='explore'&&document.body.dataset.three==='ready'&&document.body.dataset.benchmark==='ready');
   for(const theme of ['light','dark']) {
    await page.locator('#theme').selectOption(theme);
    for(const width of [320,390,768,1440]) {

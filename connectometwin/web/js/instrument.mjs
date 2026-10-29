@@ -3,39 +3,21 @@ import {families,familyOf,orientedDiff} from './view.mjs';
 import {buildTour} from './tour.mjs';
 import {compareWirings,neuronMetrics} from './metrics.mjs';
 import {vertexCount,vertexAt,edgeCount,edgeAt} from './anatomy.mjs';
-const $=id=>document.getElementById(id);
+import {$} from './elements.mjs';
+import {navigate,updateLinks} from './navigation.mjs';
 const nf=value=>value.toLocaleString('en-US');
 const text=(id,value)=>{if($(id).textContent!==String(value))$(id).textContent=String(value);};
 const names={explore:'Explore connectome',story:'Guided story',matrix:'Wiring differences',neuron:'Neuron deep dive'};
-let screen='explore',pairKey='',neuronKey='',lastRun=null,frames=[],comparison=null,detail=null;
+const screen=document.body.dataset.page;
+let pairKey='',neuronKey='',lastRun=null,frames=[],comparison=null,detail=null;
 const panel=document.querySelector('.network-panel');
-function route(next,{startStory=false}={}) {
-  if(!names[next])return;
-  if(screen==='neuron'&&next!=='neuron')cameraAction('home');
-  screen=next;document.body.dataset.screen=next;
-  for(const name of Object.keys(names))$('screen-'+name).hidden=name!==next;
-  $(next+'-viewer').append(panel);
-  for(const link of document.querySelectorAll('[data-screen-link]')){
-    if(link.dataset.screenLink===next)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
-  }
-  text('screen-subtitle',names[next]);text('network-title',names[next]);
-  if(next==='story'&&startStory&&explorerSnapshot().tourIndex<0)jumpTour(0);
-  if(next==='neuron'&&explorerSnapshot().data&&explorerSnapshot().selected<0){const snapshot=explorerSnapshot();inspectNeuron(Math.max(0,snapshot.data.neurons.findIndex(n=>familyOf(n)==='EPG')));}
-  if(next==='neuron')cameraAction('focus');
-  if(next==='matrix'){if(!$('show-diff').disabled&&!$('show-diff').checked){$('show-diff').checked=true;$('show-diff').dispatchEvent(new Event('change'));}drawMatrix();}
-  requestAnimationFrame(()=>{window.dispatchEvent(new Event('resize'));explorerSnapshot().view?.resize();drawCharts();});
-}
-for(const link of document.querySelectorAll('[data-screen-link]'))link.addEventListener('click',event=>{
- event.preventDefault();const next=link.dataset.screenLink;
- history.pushState(null,'','#'+next);route(next,{startStory:next==='story'});window.scrollTo({top:0,behavior:'instant'});
-});
-window.addEventListener('popstate',()=>route(location.hash.slice(1)||'explore'));
-$('tour-exit').addEventListener('click',()=>{history.pushState(null,'','#explore');route('explore');window.scrollTo(0,0);});
-$('take-over').addEventListener('click',()=>{ $('tour-exit').click(); });
-$('open-detail').addEventListener('click',()=>{history.pushState(null,'','#neuron');route('neuron');window.scrollTo(0,0);});
+text('screen-subtitle',names[screen]);text('network-title',names[screen]);
+$('tour-exit').addEventListener('click',()=>navigate('explore'));
+$('take-over').addEventListener('click',()=>navigate('explore'));
+$('open-detail').addEventListener('click',()=>navigate('neuron'));
 for(const button of document.querySelectorAll('[data-camera]'))button.addEventListener('click',()=>cameraAction(button.dataset.camera));
 $('quick-detail').addEventListener('click',()=>{const select=$('three-detail');select.value=select.value==='full'?'overview':'full';select.dispatchEvent(new Event('change'));});
-const fullscreen=$('viewer-fullscreen');if(!document.fullscreenEnabled)fullscreen.hidden=true;
+const fullscreen=$('viewer-fullscreen');if(!document.fullscreenEnabled||!panel)fullscreen.hidden=true;
 fullscreen.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await panel.requestFullscreen();}catch{ text('three-status','Fullscreen is unavailable. The viewer remains available on this page.');$('three-status').hidden=false; }});
 document.addEventListener('fullscreenchange',()=>{fullscreen.textContent=document.fullscreenElement?'⤢ Exit fullscreen':'⤢ Fullscreen';fullscreen.setAttribute('aria-label',document.fullscreenElement?'Exit fullscreen viewer':'Enter fullscreen viewer');});
 // Use the renderer's existing filter, so legend chips and selector stay in sync.
@@ -107,7 +89,7 @@ function drawMatrix(){
 }
 $('matrix-threshold').addEventListener('input',drawMatrix);
 $('simulate-comparison').addEventListener('click',()=>{
- $('mode').value='transplant';$('mode').dispatchEvent(new Event('change'));history.pushState(null,'','#explore');route('explore');window.scrollTo(0,0);
+ navigate('explore',{mode:'transplant'});
 });
 function updateComparison(s){
  const key=`${s.a?.version}/${s.b?.version}`;if(!s.a||!s.b||key===pairKey)return;pairKey=key;
@@ -120,6 +102,7 @@ function updateComparison(s){
  drawMatrix();
 }
 function updateTour(s){
+ if(s.tourIndex>=0){const url=new URL(location.href);url.searchParams.set('chapter',s.tourIndex);url.searchParams.set('filtering',s.filtering?'1':'0');history.replaceState(null,'',url);}
  const steps=buildTour(s.reference,s.refits,s.diffs,s.filtering);
  for(let i=0;i<steps.length;i++){
   let button=$('chapter-'+i);
@@ -182,10 +165,29 @@ function refresh(){
  text('anatomy-badge',view?.mode==='anatomy'?(view.projection?'ANATOMY · CANVAS PROJECTION':'REAL NEURON SKELETONS'):'CIRCUIT GRAPH');
  const diff=orientedDiff(s.diffs,s.a.version,s.b.version);$('wiring-difference').hidden=!$('show-diff').checked||!diff;
  if(diff)for(const kind of ['added','removed','changed'])text(kind+'-count',nf(diff[kind].length));
- updateComparison(s);updateTour(s);updateDetail(s);drawCharts();
+ for(const button of legend.querySelectorAll('[data-family]')){let count=button.querySelector('.family-count');if(!count){count=document.createElement('span');count.className='family-count';button.append(count);}count.textContent=s.data.neurons.filter(neuron=>familyOf(neuron)===button.dataset.family).length;}
+ if(screen==='matrix')updateComparison(s);if(screen==='story')updateTour(s);if(screen==='neuron')updateDetail(s);drawCharts();
+ updateLinks();
 }
 for(const event of ['explorer-update','neuron-selected','themechange'])window.addEventListener(event,()=>{if(event==='neuron-selected'&&screen==='neuron')cameraAction('focus');if(event==='themechange'){pairKey='';neuronKey='';}refresh();});
 $('show-diff').addEventListener('change',refresh);
 new MutationObserver(refresh).observe(document.body,{attributes:true,attributeFilter:['data-three','data-benchmark']});
 window.addEventListener('resize',drawCharts);
-refresh();route(names[location.hash.slice(1)]?location.hash.slice(1):'explore',{startStory:location.hash==='#story'});
+refresh();
+if(screen==='story'){const chapter=Number(new URLSearchParams(location.search).get('chapter')||0);jumpTour(Number.isInteger(chapter)&&chapter>=0&&chapter<5?chapter:0,new URLSearchParams(location.search).get('filtering')==='1');}
+if(screen==='matrix'&&!$('show-diff').disabled&&!$('show-diff').checked){$('show-diff').checked=true;$('show-diff').dispatchEvent(new Event('change'));}
+if(screen==='neuron'&&explorerSnapshot().data){
+ const s=explorerSnapshot(),id=new URLSearchParams(location.search).get('neuron');
+ inspectNeuron(Math.max(0,id?s.data.neurons.findIndex(n=>n.id===id):s.data.neurons.findIndex(n=>familyOf(n)==='EPG')));
+}
+
+
+function selectionCallout(){
+ const s=explorerSnapshot(),node=$('selection-callout'),position=s.view?.selectionScreen?.();
+ node.hidden=!position||s.selected<0;if(node.hidden)return;
+ node.textContent=`${s.data.neurons[s.selected].type} · ID …${s.data.neurons[s.selected].id.slice(-8)}`;
+ const width=$('three-wrap').clientWidth,height=$('three-wrap').clientHeight;
+ node.style.left=`${Math.max(8,Math.min(width-210,position.x+12))}px`;
+ node.style.top=`${Math.max(40,Math.min(height-100,position.y-25))}px`;
+}
+$('three-wrap').addEventListener('view-rendered',selectionCallout);window.addEventListener('neuron-selected',selectionCallout);

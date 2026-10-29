@@ -3,7 +3,7 @@ import {families, colors as defaultColors, layout, strongestEdges, orientedDiff,
 import {configureRun, referenceFor} from './run.mjs';
 import {buildTour, study} from './tour.mjs';
 import {createWiringLoader} from './data.mjs';
-const $ = id => document.getElementById(id);
+import {$} from './elements.mjs';
 const radians = degrees => degrees * Math.PI / 180;
 const degrees = angle => angle * 180 / Math.PI;
 const fetchJSON = async name => {
@@ -344,6 +344,7 @@ async function chooseThree(){
       const probe=document.createElement('canvas'),context=probe.getContext('webgl2');
       if(context){context.getExtension('WEBGL_lose_context')?.loseContext();try{threeView=new ThreeView($('three-wrap'),describeNeuron);}catch{const {ProjectedView}=await import('./projected-view.mjs');threeView=new ProjectedView($('three-wrap'),describeNeuron);}}
       else {const {ProjectedView}=await import('./projected-view.mjs');threeView=new ProjectedView($('three-wrap'),describeNeuron);}
+      const detail=new URLSearchParams(location.search).get('detail');if(['full','overview'].includes(detail))threeView.detail=detail;
       threeView.setTheme(palette,colors);
     }
     viewMode='three';$('network').style.visibility='hidden';$('network').tabIndex=-1;$('network').setAttribute('aria-hidden','true');
@@ -417,7 +418,12 @@ try {
   [state.index, state.diffs, state.maps, state.refits, state.reference] = await Promise.all(['index','diffs','maps','refits','reference'].map(fetchJSON));
   for (const id of ['wiring','compare']) { $(id).replaceChildren(...state.index.versions.map(v => new Option(state.index.names[v], v))); $(id).disabled = false; }
   $('compare').value = 'fafb_buhmann';
-  $('wiring').value = 'fafb'; $('wiring').disabled = false; $('play').disabled = false; $('reset').disabled = false;
+  $('wiring').value = 'fafb';
+  const pageQuery=new URLSearchParams(location.search);
+  for(const [param,id] of [['a','wiring'],['b','compare'],['mode','mode'],['network','model']]){const value=pageQuery.get(param);if([...$(id).options].some(option=>option.value===value))$(id).value=value;}
+  for(const [param,id,min,max] of [['cue','angle',-180,180],['scale','scale',-2,2]])if(pageQuery.has(param)){const value=Number(pageQuery.get(param));if(Number.isFinite(value)&&value>=min&&value<=max)$(id).value=String(value);}
+  for(const [param,id] of [['dark','darkness'],['refit','refit']])if(['0','1'].includes(pageQuery.get(param)))$(id).checked=pageQuery.get(param)==='1';
+ $('wiring').disabled = false; $('play').disabled = false; $('reset').disabled = false;
   fit(dial); fit(chart); size = fit(canvas); await chooseWiring();
   if (reduceMotion.matches) { state.running=false; updateNumbers(); }
   const numberRows = [
@@ -434,11 +440,11 @@ try {
   }
   $('study-results-link').href = study.source; $('tour-next').disabled = false;
   requestAnimationFrame(animate);
-  if(new URLSearchParams(location.search).get('view')!=='ring')chooseThree();
+  if($('network').isConnected&&new URLSearchParams(location.search).get('view')!=='ring')chooseThree();
 } catch (error) { fail(error); }
 
 // Read-only presentation snapshot and explicit UI actions. The engine is unchanged.
 export function explorerSnapshot(){return {data:state.data[state.current],a:state.data[$('wiring').value],b:state.data[$('compare').value],index:state.index,diffs:state.diffs,reference:state.reference,refits:state.refits,frame:state.frame,trace:state.trace,selected:selectedNeuron,run:state.run,tourIndex:tour.index,filtering:tour.filtering,view:threeView};}
 export function inspectNeuron(index){if(Number.isInteger(index)&&index>=0&&index<(state.data[state.current]?.neurons.length||0))describeNeuron(index);}
-export async function jumpTour(index){await applyTour(index);}
+export async function jumpTour(index,filtering){if(typeof filtering==='boolean')tour.filtering=filtering;await applyTour(index);}
 export function cameraAction(action){if(!threeView)return;if(action==='home')threeView.home();else if(action==='isolate')threeView.isolate(selectedNeuron);else if(action==='clear')threeView.isolate(-1);else if(action==='focus')threeView.focusSelected();else if(action==='zoom-in'||action==='zoom-out'){if(threeView.projection){threeView.zoomBy(action==='zoom-in'?1.2:.83);return;}threeView.camera.position.sub(threeView.controls.target).multiplyScalar(action==='zoom-in'?.83:1.2).add(threeView.controls.target);threeView.dirty=true;}}

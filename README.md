@@ -8,18 +8,27 @@ Compare reconstructions of the same fly compass circuit, watch a trained network
 
 The default 3D view now shows **real anatomical skeletons for all 433 FlyWire neurons**, with a 2.6 MB fast overview and optional 10.2 MB full detail. Fine terminal twigs are hidden in the overview; this screenshot shows full detail. [Full interface screenshot](connectometwin/docs/images/anatomy-full.png). Use **2D ring** for the original graph layout.
 
-## Four-screen instrument interface
+## Separate Stitch pages
 
-Explore the circuit, follow the guided story, compare wiring in a real weight matrix,
-and inspect individual neurons. The Stitch frontend now has four separate workspaces,
-locally served typography, camera overlays and bottom navigation.
-[Interface and data definitions](connectometwin/docs/STITCH-INTERFACE.md).
+The final frontend uses six independent HTML pages, with the supplied desktop layout,
+local typography and a blue/magenta/violet/teal/amber anatomical palette:
 
-![Four-screen frontend with real neuron anatomy](connectometwin/docs/images/workspace-explore.png)
+- [Explore](https://donti507.github.io/connectometwin/index.html)
+- [Guided story](https://donti507.github.io/connectometwin/story.html)
+- [Wiring differences](https://donti507.github.io/connectometwin/matrix.html)
+- [Neuron inspector](https://donti507.github.io/connectometwin/neuron.html)
+- [Orthogonal projection](https://donti507.github.io/connectometwin/projection.html)
+- [Compass circuit wiring](https://donti507.github.io/connectometwin/circuit.html)
 
-The 3D renderer uses full branches on hardware GPUs, depth cues, cleaner colors and
-selection dimming. A labelled Canvas projection of the **same real skeletons** is
-available when WebGL cannot start; it runs more slowly. The 2D ring remains available.
+![Final desktop explorer with real neuron anatomy](connectometwin/docs/images/pages-explore.png)
+
+Projection adds the illustrated PB–FB–EB atlas, live angular activity and optional real
+anatomical planes. Circuit Wiring adds recurrent pathways and a measured weight profile.
+[Page architecture and scientific definitions](connectometwin/docs/SEPARATE-PAGES.md).
+
+The 3D renderer uses full branches on hardware GPUs and a labelled real-anatomy Canvas
+projection when WebGL cannot start. The 2D ring remains available. Browser graphics
+acceleration is recommended for full-detail interaction.
 
 ## Run locally
 

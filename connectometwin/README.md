@@ -232,25 +232,29 @@ The fast overview keeps all 433 neurons but omits terminal twigs shorter than
 lightweight point sprites replace sphere meshes for anchor/activity markers.
 
 
-## Four-screen Stitch instrument frontend
+## Independent Stitch frontend pages
 
-See [STITCH-INTERFACE.md](docs/STITCH-INTERFACE.md) for screen routes, exact
-measurement definitions, fonts, rendering, the Canvas anatomy fallback and checks.
+The final frontend has six real HTML documents: `index.html`, `story.html`,
+`matrix.html`, `neuron.html`, `projection.html`, and `circuit.html`. It does not
+bundle the workspaces as hidden sections. See [SEPARATE-PAGES.md](docs/SEPARATE-PAGES.md)
+for navigation, state transfer, rendering, diagram definitions and checks.
 
-The supplied design's four screens are implemented with real model/data readouts,
-including a family-level weight matrix and neuron morphology/partner statistics.
-No mock voltage, spike, confidence or synapse-site numbers are displayed.
-`engine.mjs`, anatomical coordinate bundles and model reference values are unchanged.
+Projection and Circuit Wiring reproduce the new illustrated views using actual
+model activity and exported weights. Raw synapse locations, membrane voltage,
+fluorescence, calibrated conductance and GPU-memory comparisons are not invented.
+`engine.mjs`, the model data, reference values and anatomy bundles are unchanged.
 
 With the static server running and Playwright/Chromium available:
 
 ```sh
 node connectometwin/tests/workspaces.cjs
+node connectometwin/tests/browser.cjs
+node connectometwin/tests/three.cjs
 node connectometwin/tests/instrument.cjs
+node connectometwin/tests/release.cjs
 ```
 
-The local WebGL renderer uses full detail on hardware and overview on detected
-software GPUs. A labelled Canvas projection keeps real branching anatomy available
-when WebGL is unavailable, at a lower refresh rate. Browser graphics acceleration
-is recommended for full-detail interaction. See the rendering limitations in the
-interface notes and the anatomical data provenance in [3D-ANATOMY.md](docs/3D-ANATOMY.md).
+Historical four-workspace notes and screenshots are retained in
+[STITCH-INTERFACE.md](docs/STITCH-INTERFACE.md). Current screenshots use the
+`docs/images/pages-` prefix. The source anatomy provenance remains in
+[3D-ANATOMY.md](docs/3D-ANATOMY.md).

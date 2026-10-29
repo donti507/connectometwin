@@ -43,6 +43,8 @@ const ready=page=>page.waitForFunction(()=>document.body.dataset.ready==='ready'
   await page.locator('#tour-next').click();await ready(page);await page.waitForFunction(()=>document.body.dataset.three==='ready');assert.equal(await page.locator('#three-edges').isChecked(),true);
   await page.locator('#tour-next').click();await ready(page);await page.waitForFunction(()=>document.body.dataset.three==='ready');assert.equal(await page.locator('#three-edges').isChecked(),false);
   await page.locator('.main-nav [data-screen-link=explore]').click();
+  await page.waitForFunction(()=>document.body.dataset.three==='ready');
+  await page.locator('.viewer-settings summary').click();
   await page.locator('#three-home').click();
   await page.locator('#theme').selectOption('dark');await page.waitForTimeout(100);
   await page.screenshot({path:'/tmp/connectometwin-three-real.png',fullPage:true});
