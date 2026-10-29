@@ -230,3 +230,34 @@ The fast overview keeps all 433 neurons but omits terminal twigs shorter than
 5 µm and simplifies remaining paths at 0.75 µm. Full branches retains the
 0.25 µm data. Only changed neuron color ranges are uploaded to GPU buffers;
 lightweight point sprites replace sphere meshes for anchor/activity markers.
+
+
+## Stitch instrument frontend
+
+The uploaded Stitch explorer, guided-story, difference and neuron-inspector designs
+are adapted in `web/instrument.css` and `web/js/instrument.mjs`. They use native
+controls and the existing renderer, rather than the export's Tailwind CDN, remote
+placeholder image, fabricated counts, login, or scripted mock simulation.
+The instrument module only forwards controls and mirrors existing text results;
+`engine.mjs`, the model inputs and reference values remain unchanged.
+
+Desktop uses a main anatomical viewport, experiment sidebar and lower telemetry.
+Phones stack these panels without restricting browser zoom. Family chips drive
+the existing 3D family filter; fullscreen is offered only where supported. The
+guided-story navigation starts the existing five-step tour. Difference counts
+come from the existing same-fly comparison, independently of displayed edge caps.
+The dark palette follows the supplied navy/cyan design; system and explicit light
+and dark preferences remain supported. No fonts, scripts or images are fetched
+from external services at runtime. WebGL failure still falls back to the 2D ring.
+
+![Stitch-inspired instrument interface with real anatomical neurons](docs/images/stitch-explorer.png)
+
+Additional frontend integration check, with the static server running:
+
+```sh
+node connectometwin/tests/instrument.cjs
+```
+
+This optional test uses Playwright and Chromium like the existing browser checks,
+and covers family-filter synchronization, neuron selection, fullscreen, guided
+navigation, offline assets and light/dark layouts from 320 to 1440 pixels.
